@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentops-harness"
+version = "0.1.0"
+description = "Repository-native AI coding quality evaluation and optimization harness"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+agentops = "agentops.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
