@@ -41,6 +41,20 @@ def test_evaluator_explains_missing_agent_instructions() -> None:
     )
 
 
+def test_evaluator_reports_every_missing_capability_deterministically() -> None:
+    evaluator = ReadinessEvaluator()
+    profile = RepoProfile(root=Path("demo"))
+
+    report = evaluator.evaluate(profile)
+
+    assert report.score == 0
+    assert len(report.findings) == 6
+    assert len(report.recommendations) == 6
+    assert all(item.evidence for item in report.findings)
+    assert all(item.action for item in report.recommendations)
+    assert evaluator.evaluate(profile) == report
+
+
 @pytest.mark.parametrize(
     ("profile", "expected_score", "finding_code", "recommendation_kind"),
     [
