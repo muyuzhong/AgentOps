@@ -19,6 +19,15 @@ def test_repo_profile_serializes_paths_as_strings() -> None:
     assert profile.to_dict()["constraint_files"] == ["AGENTS.md"]
 
 
+def test_repo_profile_serializes_test_commands() -> None:
+    profile = RepoProfile(
+        root=Path("demo"),
+        test_commands=("python -m pytest",),
+    )
+
+    assert profile.to_dict()["test_commands"] == ["python -m pytest"]
+
+
 def test_recommendation_exposes_actionable_fields() -> None:
     recommendation = Recommendation(
         kind=RecommendationKind.ADD_CONSTRAINT_FILE,

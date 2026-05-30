@@ -16,6 +16,7 @@ class RepoProfile:
     test_directories: tuple[str, ...] = ()
     ci_files: tuple[str, ...] = ()
     project_markers: tuple[str, ...] = ()
+    test_commands: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         """转换为稳定的 JSON 友好结构。"""
@@ -28,4 +29,5 @@ class RepoProfile:
             "test_directories": list(self.test_directories),
             "ci_files": list(self.ci_files),
             "project_markers": list(self.project_markers),
+            "test_commands": list(self.test_commands),
         }
