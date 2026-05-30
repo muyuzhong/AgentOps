@@ -160,4 +160,3 @@ python -m pytest -v
 6. 只有 `main` 通过完整测试后才推送远程。
 
 并行 worktree 不要同时修改 `docs/project-memory.md`。集中记忆由集成者在合并后更新，避免冲突和事实分叉。
-

@@ -31,4 +31,3 @@
 - `positioning-and-boundaries.md` 和 `architecture.md` 记录相对稳定的设计决策。
 - `development-roadmap.md` 记录开发顺序和并行协作方式。
 - `superpowers/plans/` 保存逐任务实施步骤。
-

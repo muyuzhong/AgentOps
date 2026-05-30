@@ -160,4 +160,3 @@ agentops scan --repo <repo-path>
 - 公共模型负责稳定序列化，writer 不猜测内部类型。
 - 每个模块有单一职责，并可以独立测试。
 - 监督型 Agent Loop 在离线 workflow 稳定后再实现。
-
