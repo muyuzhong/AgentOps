@@ -40,12 +40,21 @@ def test_readiness_report_serializes_findings_and_recommendations() -> None:
                 evidence=("AGENTS.md",),
             ),
         ),
-        recommendations=(),
+        recommendations=(
+            Recommendation(
+                kind=RecommendationKind.ADD_CONSTRAINT_FILE,
+                title="Add AGENTS.md",
+                rationale="The repository has no agent instructions.",
+                action="Create an AGENTS.md file with test commands and boundaries.",
+            ),
+        ),
     )
 
     data = report.to_dict()
     assert data["score"] == 75
     assert data["findings"][0]["severity"] == "warning"
+    assert data["findings"][0]["evidence"] == ["AGENTS.md"]
+    assert data["recommendations"][0]["kind"] == "add_constraint_file"
 
 
 def test_artifact_serializes_kind_and_path() -> None:
