@@ -26,6 +26,7 @@ Thumbs.db
 
 # Local runtime output
 *.log
+/.worktrees/
 /.agentops/
 /artifacts/
 /reports/

@@ -1,6 +1,18 @@
 # AgentOps Harness 开发上下文
 
-本文档用于让后续参与开发的 AI coding agent 快速理解项目定位、边界和构建顺序。进入项目后，请先阅读本文档，再阅读 `docs/positioning-and-boundaries.md`。
+本文档用于让后续参与开发的 AI coding agent 快速理解项目定位、边界和构建顺序。
+
+## 每次任务开始前
+
+按顺序执行：
+
+1. 阅读本文档。
+2. 阅读 `docs/project-memory.md`，获取当前阶段、已完成能力、已知限制和下一步。
+3. 阅读与当前任务相关的设计文档和实施计划。
+4. 运行 `git status --short`，确认工作区状态。
+5. 运行 `python -m pytest -v`，确认基线测试。
+
+涉及并行开发时，先阅读 `docs/development-roadmap.md`，并使用 `.worktrees/` 创建独立 worktree。
 
 ## 项目定位
 
@@ -196,17 +208,20 @@ agentops_harness/
 
 ## 当前下一步
 
-下一步应按教程第 2 章的方式推进：
-
-1. 创建 Python 项目脚手架。
-2. 定义 `core/` 数据模型。
-3. 搭建最小 CLI。
-4. 实现 `agentops scan --repo <repo-path>` 的最小版本。
-5. 增加测试，验证核心模型和仓库扫描输出。
+Phase 0 已完成。下一步实现 `agentops scan --repo <repo-path>` 的最小版本。
 
 实施时依次执行：
 
-1. `docs/superpowers/plans/2026-05-30-phase-0-core-scaffold.md`
-2. `docs/superpowers/plans/2026-05-30-phase-1-minimal-repo-scan.md`
+1. 阅读 `docs/project-memory.md`。
+2. 执行 `docs/superpowers/plans/2026-05-30-phase-1-minimal-repo-scan.md`。
 
 每次只完成计划中的一个 Task，先写失败测试，再写最小实现，然后运行测试并提交。不要一次实现后续 Phase 的能力。
+
+## 每次任务完成后
+
+1. 运行相关测试和完整测试。
+2. 将功能合并到 `main`。
+3. 更新 `docs/project-memory.md` 中的当前状态、最近完成、下一步和已知风险。
+4. 确认集中记忆已更新后再推送远程。
+
+并行 worktree 不直接修改 `docs/project-memory.md`。集中记忆由集成者在合并后更新，避免冲突和事实分叉。
