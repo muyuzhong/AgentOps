@@ -20,3 +20,10 @@ def test_cli_version_prints_package_version(capsys: pytest.CaptureFixture[str]) 
 
     assert exc_info.value.code == 0
     assert capsys.readouterr().out.strip() == "0.1.0"
+
+
+def test_cli_rejects_phase_one_scan_command() -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["scan"])
+
+    assert exc_info.value.code == 2

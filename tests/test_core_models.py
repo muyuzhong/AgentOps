@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from agentops.core.artifact import Artifact, ArtifactKind
 from agentops.core.evaluation import Finding, ReadinessReport, Severity
 from agentops.core.recommendation import Recommendation, RecommendationKind
@@ -64,3 +66,16 @@ def test_artifact_serializes_kind_and_path() -> None:
         "kind": "markdown_report",
         "path": "report.md",
     }
+
+
+@pytest.mark.parametrize("score", [-1, 101, 50.5, True, False, "50", None])
+def test_readiness_report_rejects_invalid_scores(score: object) -> None:
+    with pytest.raises(ValueError, match="score must be between 0 and 100"):
+        ReadinessReport(profile=RepoProfile(root=Path("demo")), score=score)
+
+
+@pytest.mark.parametrize("score", [0, 100])
+def test_readiness_report_accepts_boundary_scores(score: int) -> None:
+    report = ReadinessReport(profile=RepoProfile(root=Path("demo")), score=score)
+
+    assert report.score == score

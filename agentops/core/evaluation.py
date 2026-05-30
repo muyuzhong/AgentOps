@@ -49,8 +49,8 @@ class ReadinessReport:
     def __post_init__(self) -> None:
         """限制 readiness 分数落在可解释的百分制范围内。"""
 
-        # 百分制边界在模型入口校验，避免下游报告出现无效分数。
-        if not 0 <= self.score <= 100:
+        # 使用严格整数判断排除 bool，并统一拦截无法参与范围比较的输入。
+        if type(self.score) is not int or not 0 <= self.score <= 100:
             raise ValueError("score must be between 0 and 100")
 
     def to_dict(self) -> dict[str, object]:
