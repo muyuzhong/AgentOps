@@ -3,6 +3,8 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.tox/
+.nox/
 .venv/
 venv/
 dist/
@@ -10,5 +12,27 @@ build/
 *.egg-info/
 .coverage
 htmlcov/
-.env
-.agentops/
+coverage.xml
+
+# Local configuration and credentials
+.env*
+!.env.example
+
+# IDE and operating system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local runtime output
+*.log
+/.agentops/
+/artifacts/
+/reports/
+/local-data/
+/tmp/
+/agentops-report.md
+/agentops-score.json
+/suggested-claude-md.md
+/suggested-agents-md.md
+/skill-candidates.md
