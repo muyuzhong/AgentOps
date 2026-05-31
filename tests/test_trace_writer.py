@@ -35,4 +35,7 @@ def test_trace_writer_writes_utf8_json_artifact(tmp_path: Path) -> None:
     content = artifact.path.read_text(encoding="utf-8")
     assert content.endswith("\n")
     assert "扫描完成" in content
+    assert content.startswith('{\n  "events": [')
+    assert content.index('"events"') < content.index('"failures"')
+    assert content.index('"failures"') < content.index('"status"')
     assert json.loads(content)["status"] == "completed"

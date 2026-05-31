@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from agentops.core.workflow import WorkflowEventType, WorkflowStatus
 from agentops.runtime.workflow import WorkflowRunner, WorkflowStep
 
@@ -89,3 +91,13 @@ def test_workflow_runner_continues_after_optional_step_failure() -> None:
     assert execution.trace.status is WorkflowStatus.COMPLETED_WITH_WARNINGS
     assert execution.trace.failures[0].recoverable is True
     assert execution.trace.events[-1].event_type is WorkflowEventType.WORKFLOW_COMPLETED
+
+
+def test_workflow_runner_rejects_naive_clock() -> None:
+    runner = WorkflowRunner(
+        workflow_id_factory=lambda: "wf_demo",
+        clock=lambda: datetime(2026, 5, 31),
+    )
+
+    with pytest.raises(ValueError, match="timestamp must be timezone-aware"):
+        runner.run(workflow_name="demo", steps=())

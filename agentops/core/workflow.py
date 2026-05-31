@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Mapping
 
@@ -58,6 +58,13 @@ class WorkflowEvent:
     timestamp: datetime
     step_name: str | None = None
     metadata: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """拒绝无时区时间，并把事件时间统一为 UTC。"""
+
+        if self.timestamp.tzinfo is None or self.timestamp.utcoffset() is None:
+            raise ValueError("timestamp must be timezone-aware")
+        object.__setattr__(self, "timestamp", self.timestamp.astimezone(timezone.utc))
 
     def to_dict(self) -> dict[str, object]:
         """转换为 JSON 友好的事件结构。"""
