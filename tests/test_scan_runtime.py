@@ -3,10 +3,13 @@ from pathlib import Path
 from agentops.runtime.scan import run_scan
 
 
-def tree_snapshot(root: Path) -> tuple[str, ...]:
+def tree_snapshot(root: Path) -> tuple[tuple[str, bytes | None], ...]:
     return tuple(
         sorted(
-            path.relative_to(root).as_posix()
+            (
+                path.relative_to(root).as_posix(),
+                None if path.is_dir() else path.read_bytes(),
+            )
             for path in root.rglob("*")
         )
     )

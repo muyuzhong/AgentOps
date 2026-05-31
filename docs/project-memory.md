@@ -38,7 +38,7 @@
 python -m pytest -v
 ```
 
-- 最近一次确认的测试结果：2026-05-31 执行 `python -m pytest -v`，共 `32 passed`。
+- 最近一次确认的测试结果：2026-05-31 执行 `python -m pytest -v`，共 `36 passed`。
 
 ## 已完成能力
 
@@ -127,6 +127,7 @@ python -m pytest -v
 
 | 日期 | 提交 | 内容 |
 | --- | --- | --- |
+| 2026-05-31 | `cd785a9` | 收紧 scanner 文件型事实识别，并补充只读和稳定性回归测试 |
 | 2026-05-31 | `deffed1` | 暴露 `agentops scan` CLI 子命令和输出目录参数 |
 | 2026-05-31 | `5f18633` | 串联 scanner、evaluator 和 writer 的 scan runtime |
 | 2026-05-31 | `521a37c` | 写出 Markdown 和 JSON readiness 产物 |
