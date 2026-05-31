@@ -208,13 +208,13 @@ agentops_harness/
 
 ## 当前下一步
 
-Phase 1 已完成。下一步先为 Phase 2 编写纵向切片实施计划，再开始编码。
+Phase 1 已完成。下一步执行 Phase 2 workflow runtime 实施计划。
 
 实施时依次执行：
 
 1. 阅读 `docs/project-memory.md`。
 2. 阅读 `docs/development-roadmap.md`，确认下一阶段边界。
-3. 为下一阶段编写新的纵向切片实施计划。
+3. 执行 `docs/superpowers/plans/2026-05-31-phase-2-workflow-runtime.md`。
 
 每次只完成计划中的一个 Task，先写失败测试，再写最小实现，然后运行测试并提交。不要一次实现后续 Phase 的能力。
 

@@ -25,7 +25,7 @@
 ## 当前状态
 
 - 当前分支：`main`
-- 当前阶段：Phase 1 已完成，准备规划 Phase 2。
+- 当前阶段：Phase 1 已完成，Phase 2 实施计划已写好，准备执行。
 - 当前版本：`0.1.0`
 - 当前可用命令：
   - `agentops --help`
@@ -101,7 +101,18 @@ python -m pytest -v
 
 ## 下一步
 
-为 Phase 2 编写新的纵向切片实施计划，显式建模 pipeline 状态、事件、错误降级和 trace。开始编码前先确认 Phase 2 的最小可运行边界。
+执行：
+
+```text
+docs/superpowers/plans/2026-05-31-phase-2-workflow-runtime.md
+```
+
+Phase 2 将显式建模 pipeline 状态、事件、错误降级和 trace，并让 `agentops scan` 写出 `agentops-trace.json`。
+
+Phase 2 默认串行执行。完成 workflow models 后，可以有限并行开发：
+
+- `WorkflowRunner`
+- `TraceWriter`
 
 ## 关键决策
 
