@@ -96,12 +96,12 @@ Repo Scan
 | 模块 | 职责 | 第一版状态 |
 | --- | --- | --- |
 | `core/` | 定义稳定的领域模型和序列化契约 | 已建立基础模型 |
-| `scanners/` | 只读扫描仓库结构、约束文件、CI 和测试线索 | 待实现 |
+| `scanners/` | 只读扫描仓库结构、约束文件、CI 和测试线索 | Phase 1 已实现 |
 | `parsers/` | 解析 transcript、diff、shell output、测试结果 | 后续实现 |
-| `evaluators/` | 使用确定性规则生成评分和 Finding | 待实现 |
+| `evaluators/` | 使用确定性规则生成评分和 Finding | Phase 1 已实现 readiness 规则 |
 | `recommenders/` | 根据 Finding 生成可执行建议 | 后续扩展 |
-| `writers/` | 输出 Markdown、JSON 和建议草案 | 待实现 |
-| `runtime/` | 串联各模块，维护 workflow 状态和事件 | 待实现 |
+| `writers/` | 输出 Markdown、JSON 和建议草案 | Phase 1 已实现 readiness 产物 |
+| `runtime/` | 串联各模块，维护 workflow 状态和事件 | Phase 1 已实现 scan 编排，后续扩展状态和事件 |
 
 ## 核心数据模型
 

@@ -30,8 +30,8 @@ flowchart LR
 | 阶段 | 目标 | 用户可见产出 | 状态 |
 | --- | --- | --- | --- |
 | Phase 0 | 建立公共语言和工程骨架 | `agentops --help`、`agentops --version` | 已完成 |
-| Phase 1 | 打通仓库 readiness 扫描 | `agentops scan --repo <path>` | 下一步 |
-| Phase 2 | 显式建模确定性 workflow | pipeline 状态、事件、错误降级、trace | 待规划 |
+| Phase 1 | 打通仓库 readiness 扫描 | `agentops scan --repo <path>` | 已完成 |
+| Phase 2 | 显式建模确定性 workflow | pipeline 状态、事件、错误降级、trace | 下一步规划 |
 | Phase 3 | 扩展分析工具层 | git、diff、CI、test、transcript、shell output 解析 | 待规划 |
 | Phase 4 | 评估单次 AI coding 过程 | `agentops eval`、上下文和边界诊断 | 待规划 |
 | Phase 5 | 沉淀仓库级经验 | 历史评测、失败模式、规则、skill 候选 | 待规划 |
@@ -49,7 +49,8 @@ docs/superpowers/plans/
 当前顺序：
 
 1. `2026-05-30-phase-0-core-scaffold.md`：已完成。
-2. `2026-05-30-phase-1-minimal-repo-scan.md`：下一步执行。
+2. `2026-05-30-phase-1-minimal-repo-scan.md`：已完成。
+3. Phase 2：先编写新的纵向切片实施计划，再开始编码。
 
 每进入一个新阶段，先写一份新的纵向切片实施计划，再开始编码。
 

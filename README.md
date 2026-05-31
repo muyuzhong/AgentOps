@@ -33,19 +33,24 @@ python -m pip install -e .
 
 ## 使用方式
 
-项目处于早期开发阶段。目前可以检查 CLI：
+项目处于早期开发阶段。目前可以检查 CLI 并扫描仓库 readiness：
 
 ```shell
 agentops --help
 agentops --version
-```
-
-仓库扫描、离线过程评测和改进建议功能正在开发中。后续版本将提供：
-
-```shell
 # 扫描仓库的 AI coding readiness
 agentops scan --repo <repo-path>
+```
 
+默认情况下，扫描结果写入当前目录下的 `.agentops/`。也可以显式指定输出目录：
+
+```shell
+agentops scan --repo <repo-path> --output <output-path>
+```
+
+离线过程评测和进一步的改进建议仍在开发中。后续版本将提供：
+
+```shell
 # 评估一次 AI coding 工作过程
 agentops eval \
   --repo <repo-path> \
@@ -61,6 +66,11 @@ AgentOps Harness 会将本地分析结果写入 `.agentops/`：
 .agentops/
   agentops-report.md
   agentops-score.json
+```
+
+后续版本还会逐步增加：
+
+```text
   suggested-claude-md.md
   suggested-agents-md.md
   skill-candidates.md
