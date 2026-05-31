@@ -66,7 +66,10 @@ AgentOps Harness 会将本地分析结果写入 `.agentops/`：
 .agentops/
   agentops-report.md
   agentops-score.json
+  agentops-trace.json
 ```
+
+`agentops-trace.json` 记录扫描 workflow 的执行步骤和失败信息，便于定位问题。
 
 后续版本还会逐步增加：
 
@@ -80,6 +83,7 @@ AgentOps Harness 会将本地分析结果写入 `.agentops/`：
 | --- | --- |
 | `agentops-report.md` | 面向开发者的仓库 readiness 或会话评测报告 |
 | `agentops-score.json` | 面向工具链的结构化评分和诊断证据 |
+| `agentops-trace.json` | 扫描 workflow 的执行步骤和失败信息 |
 | `suggested-claude-md.md` | `CLAUDE.md` 改进草案 |
 | `suggested-agents-md.md` | `AGENTS.md` 改进草案 |
 | `skill-candidates.md` | 可以沉淀为 skill 的重复经验 |

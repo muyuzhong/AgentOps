@@ -76,8 +76,10 @@ agentops eval --repo <repo-path> --transcript <session.md> --diff <changes.diff>
 仓库扫描流程：
 
 ```text
-Repo Scan -> Readiness Evaluate -> Artifact Write
+scan_repository -> evaluate_readiness -> write_readiness_artifacts
 ```
+
+当前编排层通过 `WorkflowRunner` 顺序执行同步步骤，并将生命周期事件写入 `WorkflowTrace`。required step 失败时立即停止后续步骤并保留失败 trace；optional step 失败时记录可恢复失败，继续执行后续步骤，并以 `completed_with_warnings` 结束。
 
 离线会话评测流程：
 
@@ -100,8 +102,8 @@ Repo Scan
 | `parsers/` | 解析 transcript、diff、shell output、测试结果 | 后续实现 |
 | `evaluators/` | 使用确定性规则生成评分和 Finding | Phase 1 已实现 readiness 规则 |
 | `recommenders/` | 根据 Finding 生成可执行建议 | 后续扩展 |
-| `writers/` | 输出 Markdown、JSON 和建议草案 | Phase 1 已实现 readiness 产物 |
-| `runtime/` | 串联各模块，维护 workflow 状态和事件 | Phase 1 已实现 scan 编排，后续扩展状态和事件 |
+| `writers/` | 输出 Markdown、JSON 和建议草案 | Phase 2 已实现 readiness 与 workflow trace 产物 |
+| `runtime/` | 串联各模块，维护 workflow 状态和事件 | Phase 2 已实现 scan workflow 编排、错误隔离和 trace |
 
 ## 核心数据模型
 
@@ -114,6 +116,7 @@ Repo Scan
 | `ReadinessReport` | 聚合仓库画像、评分、发现和建议 |
 | `Recommendation` | 保存可执行改进建议 |
 | `Artifact` | 描述生成的报告或结构化产物 |
+| `WorkflowTrace` | 保存 workflow 状态、生命周期事件和步骤失败 |
 
 后续按真实需求增加：
 
@@ -149,7 +152,10 @@ agentops scan --repo <repo-path>
 .agentops/
   agentops-report.md
   agentops-score.json
+  agentops-trace.json
 ```
+
+其中 `agentops-trace.json` 记录 workflow 步骤顺序、最终状态和失败信息。成功扫描和可写输出目录下的失败扫描都会保留 trace 证据。
 
 ## 架构约束
 

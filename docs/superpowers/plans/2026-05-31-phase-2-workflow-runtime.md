@@ -517,7 +517,7 @@ git commit -m "feat: write workflow trace artifacts"
 - Modify: `agentops/runtime/scan.py`
 - Modify: `tests/test_scan_runtime.py`
 
-- [ ] **Step 1: Add failing scan trace test**
+- [x] **Step 1: Add failing scan trace test**
 
 Require a successful scan to:
 
@@ -539,7 +539,7 @@ Expected ordered completed steps:
 ]
 ```
 
-- [ ] **Step 2: Add failing scan failure test**
+- [x] **Step 2: Add failing scan failure test**
 
 Require a missing repository path to:
 
@@ -549,7 +549,7 @@ Require a missing repository path to:
 - record `scan_repository` as the failed step;
 - skip evaluation and report writing.
 
-- [ ] **Step 3: Run tests and confirm failure**
+- [x] **Step 3: Run tests and confirm failure**
 
 Run:
 
@@ -559,7 +559,7 @@ python -m pytest tests/test_scan_runtime.py -v
 
 Expected: FAIL because scan does not use `WorkflowRunner`.
 
-- [ ] **Step 4: Extend `ScanResult`**
+- [x] **Step 4: Extend `ScanResult`**
 
 Define:
 
@@ -571,7 +571,7 @@ class ScanResult:
     trace: WorkflowTrace
 ```
 
-- [ ] **Step 5: Add structured scan failure**
+- [x] **Step 5: Add structured scan failure**
 
 Define:
 
@@ -588,7 +588,7 @@ class ScanWorkflowError(RuntimeError):
 
 Expose the failed trace and optional trace artifact to callers.
 
-- [ ] **Step 6: Run scan through `WorkflowRunner`**
+- [x] **Step 6: Run scan through `WorkflowRunner`**
 
 Use three required steps:
 
@@ -606,13 +606,13 @@ After the workflow finishes:
 
 If trace writing fails after an earlier required-step failure, preserve the original workflow failure and set `trace_artifact=None`.
 
-- [ ] **Step 7: Update stability assertions**
+- [x] **Step 7: Update stability assertions**
 
 Keep the existing target-repository read-only assertion.
 
 Continue requiring deterministic Markdown and JSON readiness artifacts for repeated scans. Do not require byte-identical trace JSON because trace IDs and timestamps differ across runs.
 
-- [ ] **Step 8: Run tests**
+- [x] **Step 8: Run tests**
 
 Run:
 
@@ -622,7 +622,7 @@ python -m pytest tests/test_scan_runtime.py -v
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Run:
 
@@ -637,7 +637,7 @@ git commit -m "feat: trace repository scan workflow"
 - Modify: `agentops/cli.py`
 - Modify: `tests/test_cli.py`
 
-- [ ] **Step 1: Add failing CLI success assertion**
+- [x] **Step 1: Add failing CLI success assertion**
 
 Update scan CLI tests to require:
 
@@ -647,7 +647,7 @@ agentops-trace.json
 
 in the selected output directory.
 
-- [ ] **Step 2: Add failing CLI error test**
+- [x] **Step 2: Add failing CLI error test**
 
 Require:
 
@@ -665,7 +665,7 @@ assert "scan_repository" in capsys.readouterr().err
 assert (output_dir / "agentops-trace.json").exists()
 ```
 
-- [ ] **Step 3: Run tests and confirm failure**
+- [x] **Step 3: Run tests and confirm failure**
 
 Run:
 
@@ -675,7 +675,7 @@ python -m pytest tests/test_cli.py -v
 
 Expected: FAIL because CLI does not handle structured workflow failure.
 
-- [ ] **Step 4: Handle `ScanWorkflowError`**
+- [x] **Step 4: Handle `ScanWorkflowError`**
 
 Catch only `ScanWorkflowError`.
 
@@ -693,7 +693,7 @@ Wrote <trace-path>
 
 Return exit code `1`.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -703,7 +703,7 @@ python -m pytest tests/test_cli.py -v
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
@@ -722,7 +722,7 @@ git commit -m "feat: report scan workflow failures"
 - Modify: `docs/README.md`
 - Modify: `agent.md`
 
-- [ ] **Step 1: Update GitHub README**
+- [x] **Step 1: Update GitHub README**
 
 Keep README user-facing. Add only:
 
@@ -731,7 +731,7 @@ Keep README user-facing. Add only:
 
 Do not add internal implementation details.
 
-- [ ] **Step 2: Update architecture documentation**
+- [x] **Step 2: Update architecture documentation**
 
 Record:
 
@@ -740,7 +740,7 @@ Record:
 - required and optional step behavior;
 - the current scan step sequence.
 
-- [ ] **Step 3: Update roadmap and document index**
+- [x] **Step 3: Update roadmap and document index**
 
 Mark Phase 2 complete only after implementation and verification pass.
 
@@ -765,7 +765,7 @@ git commit -m "docs: record workflow runtime architecture"
 
 ## Task 7: Verify Phase 2
 
-- [ ] **Step 1: Run all automated tests**
+- [x] **Step 1: Run all automated tests**
 
 Run:
 
@@ -775,7 +775,7 @@ python -m pytest -v
 
 Expected: all tests pass.
 
-- [ ] **Step 2: Run a successful self-scan**
+- [x] **Step 2: Run a successful self-scan**
 
 Run:
 
@@ -791,7 +791,7 @@ Expected:
 - `agentops-trace.json` exists;
 - trace status is `completed`.
 
-- [ ] **Step 3: Inspect the successful trace**
+- [x] **Step 3: Inspect the successful trace**
 
 Run:
 
@@ -801,7 +801,7 @@ Get-Content -LiteralPath ".agentops\self-scan\agentops-trace.json" -Encoding utf
 
 Expected: JSON contains ordered step events for scan, evaluate, and write.
 
-- [ ] **Step 4: Run a failing scan**
+- [x] **Step 4: Run a failing scan**
 
 Run:
 
@@ -816,7 +816,7 @@ Expected:
 - `.agentops/failed-scan/agentops-trace.json` exists;
 - trace status is `failed`.
 
-- [ ] **Step 5: Confirm local artifacts remain ignored**
+- [x] **Step 5: Confirm local artifacts remain ignored**
 
 Run:
 

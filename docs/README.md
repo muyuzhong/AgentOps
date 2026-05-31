@@ -22,7 +22,7 @@
 | --- | --- |
 | `superpowers/plans/2026-05-30-phase-0-core-scaffold.md` | 已完成 |
 | `superpowers/plans/2026-05-30-phase-1-minimal-repo-scan.md` | 已完成 |
-| `superpowers/plans/2026-05-31-phase-2-workflow-runtime.md` | 下一步执行 |
+| `superpowers/plans/2026-05-31-phase-2-workflow-runtime.md` | 已完成 |
 
 ## 文档职责
 
