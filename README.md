@@ -1,29 +1,31 @@
 # AgentOps Harness
 
-AgentOps Harness 是一个面向真实代码仓库的 AI coding 工作质量评测与优化系统。
+[简体中文](README.zh-CN.md)
 
-Claude Code、Codex、Cursor 等工具可以执行开发任务。AgentOps Harness 关注这些工具在真实仓库中的工作质量：它观察工作过程，解释问题原因，并将一次开发中的经验沉淀为可复用的仓库资产。
+AgentOps Harness is a repository-native quality evaluation and improvement system for AI coding workflows.
 
-它帮助你回答：
+Tools such as Claude Code, Codex, and Cursor can execute development tasks. AgentOps Harness focuses on the quality of that work inside real repositories. It observes the workflow, explains failure modes, and turns lessons from each task into reusable repository assets.
 
-- 当前 Agent 是否读取了正确上下文。
-- 修改是否超出任务边界。
-- 验证证据是否充分。
-- 长对话是否开始退化。
-- 哪些规则应该写进 `CLAUDE.md` 或 `AGENTS.md`。
-- 哪些重复经验应该提炼为 skill、hook、测试命令或工作流建议。
+It helps you answer:
 
-## 功能
+- Did the coding agent read the right context?
+- Did the changes stay within the requested scope?
+- Is there enough verification evidence?
+- Is a long conversation starting to degrade?
+- Which rules belong in `CLAUDE.md` or `AGENTS.md`?
+- Which recurring lessons should become skills, hooks, test commands, or workflow guidance?
 
-- **仓库就绪度扫描**：识别项目结构、测试命令、CI 配置和 Agent 约束文件。
-- **开发过程评测**：结合任务描述、会话记录、git diff、命令输出和测试结果，分析一次 AI coding 工作。
-- **问题诊断**：识别上下文缺失、修改越界、验证不足、重复失败和任务膨胀。
-- **改进建议**：给出 `CLAUDE.md`、`AGENTS.md`、skill、hook、验证命令和上下文管理建议。
-- **经验沉淀**：积累仓库级失败模式和规则，让后续 AI coding 更稳定。
+## Features
 
-## 安装
+- **Repository readiness scanning**: Identify project structure, test commands, CI configuration, and agent instruction files.
+- **Workflow tracing**: Record deterministic scan steps and failures for inspection.
+- **Session evaluation**: Analyze task descriptions, bounded session logs, git diffs, shell output, and test results. This capability is under development.
+- **Actionable diagnosis**: Detect missing context, scope drift, insufficient verification, repeated failures, and task expansion. This capability is under development.
+- **Repository-level improvements**: Suggest updates to `CLAUDE.md`, `AGENTS.md`, skills, hooks, verification commands, and context-management practices. This capability is under development.
 
-要求 Python 3.11 或更高版本。
+## Installation
+
+AgentOps Harness requires Python 3.11 or newer.
 
 ```shell
 git clone https://github.com/muyuzhong/AgentOps.git
@@ -31,36 +33,37 @@ cd AgentOps
 python -m pip install -e .
 ```
 
-## 使用方式
+## Usage
 
-项目处于早期开发阶段。目前可以检查 CLI 并扫描仓库 readiness：
+The project is in early development. The current CLI can report its version and scan a repository for AI coding readiness:
 
 ```shell
 agentops --help
 agentops --version
-# 扫描仓库的 AI coding readiness
+
+# Scan a repository for AI coding readiness
 agentops scan --repo <repo-path>
 ```
 
-默认情况下，扫描结果写入当前目录下的 `.agentops/`。也可以显式指定输出目录：
+By default, scan artifacts are written to `.agentops/` in the current directory. You can select another output directory:
 
 ```shell
 agentops scan --repo <repo-path> --output <output-path>
 ```
 
-离线过程评测和进一步的改进建议仍在开发中。后续版本将提供：
+Offline session evaluation and repository improvement suggestions are under development. A future release will provide:
 
 ```shell
-# 评估一次 AI coding 工作过程
+# Evaluate one AI coding workflow
 agentops eval \
   --repo <repo-path> \
   --transcript <session.md> \
   --diff <changes.diff>
 ```
 
-## 输出示例
+## Output
 
-AgentOps Harness 会将本地分析结果写入 `.agentops/`：
+AgentOps Harness writes local analysis artifacts to `.agentops/`:
 
 ```text
 .agentops/
@@ -69,9 +72,9 @@ AgentOps Harness 会将本地分析结果写入 `.agentops/`：
   agentops-trace.json
 ```
 
-`agentops-trace.json` 记录扫描 workflow 的执行步骤和失败信息，便于定位问题。
+`agentops-trace.json` records workflow steps and failures so you can inspect how a scan completed.
 
-后续版本还会逐步增加：
+Future releases will add:
 
 ```text
   suggested-claude-md.md
@@ -79,19 +82,19 @@ AgentOps Harness 会将本地分析结果写入 `.agentops/`：
   skill-candidates.md
 ```
 
-| 文件 | 用途 |
+| File | Purpose |
 | --- | --- |
-| `agentops-report.md` | 面向开发者的仓库 readiness 或会话评测报告 |
-| `agentops-score.json` | 面向工具链的结构化评分和诊断证据 |
-| `agentops-trace.json` | 扫描 workflow 的执行步骤和失败信息 |
-| `suggested-claude-md.md` | `CLAUDE.md` 改进草案 |
-| `suggested-agents-md.md` | `AGENTS.md` 改进草案 |
-| `skill-candidates.md` | 可以沉淀为 skill 的重复经验 |
+| `agentops-report.md` | Developer-facing repository readiness or session evaluation report |
+| `agentops-score.json` | Structured scores and diagnostic evidence for tool integrations |
+| `agentops-trace.json` | Scan workflow steps and failure details |
+| `suggested-claude-md.md` | Draft improvements for `CLAUDE.md` |
+| `suggested-agents-md.md` | Draft improvements for `AGENTS.md` |
+| `skill-candidates.md` | Recurring lessons that may become reusable skills |
 
-## 项目边界
+## Project Scope
 
-AgentOps Harness 不实现另一个 coding agent，也不替代 Claude Code、Codex 或 Cursor。它为这些工具补充仓库级的质量评测、问题诊断和经验沉淀能力。
+AgentOps Harness does not implement another coding agent and does not replace Claude Code, Codex, or Cursor. It adds repository-level quality evaluation, workflow diagnosis, and reusable operational guidance around those tools.
 
-## 开发状态
+## Development Status
 
-项目仍在开发中，接口可能调整。欢迎提交 Issue 讨论使用场景和需求。
+AgentOps Harness is an early-stage open-source project. Interfaces may change. Issues and discussions about real AI coding workflows are welcome.
