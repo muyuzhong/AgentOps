@@ -81,19 +81,18 @@ Initialization is an explicit write operation. Existing `scan` behavior remains 
 
 ### Files
 
-The command creates or refreshes:
+The command always creates or refreshes:
 
 ```text
 <repo-path>/
   .agentops/
     session-protocol.md
     agentops-session.md
-    .gitignore
 ```
 
 `session-protocol.md` contains the canonical task-report template and instructions. `agentops-session.md` is the append-only task log consumed by the parser.
 
-`.gitignore` is created or updated only when required by the selected session-log policy:
+`.agentops/.gitignore` is created or updated only when required by the selected session-log policy:
 
 | Policy | Behavior |
 | --- | --- |
@@ -102,6 +101,8 @@ The command creates or refreshes:
 | `unmanaged` | Do not change `.agentops/.gitignore`. |
 
 When `.agentops/.gitignore` already exists, initialization preserves unrelated user rules. The initializer manages only its own marked block.
+
+Initialization does not modify the repository-root `.gitignore`. If it already ignores the whole `.agentops/` directory, `tracked` removes only the AgentOps-managed session-log rule and leaves broader repository policy to the user.
 
 The command also installs a concise managed reference block into repository-level agent instructions.
 
@@ -415,7 +416,7 @@ Cover:
 - `init` creates `.agentops/session-protocol.md` and `.agentops/agentops-session.md`;
 - interactive `init` asks for a session-log policy;
 - non-interactive `init` defaults to `private`;
-- `private`, `tracked`, and `unmanaged` policies update only AgentOps-managed ignore rules;
+- `private` and `tracked` update only AgentOps-managed ignore rules, while `unmanaged` leaves ignore files unchanged;
 - an existing `.agentops/.gitignore` preserves unrelated user content;
 - `init` updates only `CLAUDE.md` when only that file exists;
 - `init` updates only `AGENTS.md` when only that file exists;

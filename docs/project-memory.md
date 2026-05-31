@@ -25,7 +25,7 @@
 ## 当前状态
 
 - 当前分支：`main`
-- 当前阶段：Phase 2 已完成，下一步为 Phase 3 analysis tools 编写实施计划。
+- 当前阶段：Phase 2 已完成，Phase 3 analysis tools 实施计划已写好，准备执行。
 - 当前版本：`0.1.0`
 - 当前可用命令：
   - `agentops --help`
@@ -133,7 +133,13 @@ python -m pytest -v
 docs/superpowers/plans/2026-05-31-phase-2-workflow-runtime.md
 ```
 
-Phase 2 已完成。下一步为 Phase 3 analysis tools 编写新的纵向切片实施计划，明确 git、diff、CI、test、transcript 和 shell output 解析边界。
+Phase 2 已完成。下一步执行 Phase 3 analysis tools 实施计划：
+
+```text
+docs/superpowers/plans/2026-05-31-phase-3-analysis-tools.md
+```
+
+Phase 3 将增加显式 `agentops init`、有界任务日志协议，以及 git、diff、CI、test 和 shell output 证据解析。它只负责确定性采集和规范化，不提前实现 `agentops eval`、质量评分或 LLM 摘要。
 
 ## 关键决策
 
@@ -148,6 +154,9 @@ Phase 2 已完成。下一步为 Phase 3 analysis tools 编写新的纵向切片
 - 集中记忆只在集成分支更新。
 - workflow event 时间戳必须带时区，并在模型边界统一归一化为 UTC。
 - workflow required step 失败时停止；optional step 失败时降级继续执行。
+- Phase 3 不默认读取完整聊天记录。coding agent 每完成一个独立任务后，向 `.agentops/agentops-session.md` 追加简短汇报；parser 只保留有界结构化证据和原文引用。
+- `agentops init` 是显式写操作。已有 `CLAUDE.md` 或 `AGENTS.md` 时追加托管协议块；两者同时存在时都更新；两者都不存在时创建或更新 `rule.md`。
+- `agentops init` 允许用户选择 session log 为 `private`、`tracked` 或 `unmanaged`；非交互环境未指定策略时默认 `private`。
 
 ## 已知限制和风险
 

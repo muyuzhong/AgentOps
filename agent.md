@@ -208,13 +208,13 @@ agentops_harness/
 
 ## 当前下一步
 
-Phase 2 workflow runtime 已完成。下一步先为 Phase 3 analysis tools 编写实施计划，再按计划扩展解析工具层。
+Phase 2 workflow runtime 已完成。Phase 3 analysis tools 实施计划已写好，下一步按计划扩展初始化、证据采集和解析工具层。
 
 实施时依次执行：
 
 1. 阅读 `docs/project-memory.md`。
 2. 阅读 `docs/development-roadmap.md`，确认下一阶段边界。
-3. 编写 Phase 3 analysis tools 实施计划，明确 git、diff、CI、test、transcript 和 shell output 解析边界。
+3. 执行 `docs/superpowers/plans/2026-05-31-phase-3-analysis-tools.md`。
 
 每次只完成计划中的一个 Task，先写失败测试，再写最小实现，然后运行测试并提交。不要一次实现后续 Phase 的能力。
 
