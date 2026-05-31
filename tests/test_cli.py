@@ -53,6 +53,7 @@ def test_scan_command_writes_artifacts(
     assert exit_code == 0
     assert (output_dir / "agentops-report.md").exists()
     assert (output_dir / "agentops-score.json").exists()
+    assert (output_dir / "agentops-trace.json").exists()
     output = capsys.readouterr().out
     assert "AgentOps readiness score:" in output
     assert "Wrote" in output
@@ -68,3 +69,24 @@ def test_scan_command_uses_default_output_directory(
     assert main(["scan", "--repo", str(repo_path)]) == 0
     assert (tmp_path / ".agentops" / "agentops-report.md").exists()
     assert (tmp_path / ".agentops" / "agentops-score.json").exists()
+    assert (tmp_path / ".agentops" / "agentops-trace.json").exists()
+
+
+def test_scan_command_reports_structured_workflow_failure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output_dir = tmp_path / "output"
+
+    exit_code = main(
+        [
+            "scan",
+            "--repo",
+            str(tmp_path / "missing"),
+            "--output",
+            str(output_dir),
+        ]
+    )
+
+    assert exit_code == 1
+    assert "scan_repository" in capsys.readouterr().err
+    assert (output_dir / "agentops-trace.json").exists()

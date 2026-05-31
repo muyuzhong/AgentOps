@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from agentops import __version__
-from agentops.runtime.scan import run_scan
+from agentops.runtime.scan import ScanWorkflowError, run_scan
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,7 +34,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "scan":
-        result = run_scan(args.repo, args.output)
+        try:
+            result = run_scan(args.repo, args.output)
+        except ScanWorkflowError as error:
+            failed_step = (
+                error.trace.failures[0].step_name
+                if error.trace.failures
+                else "unknown"
+            )
+            print(f"AgentOps scan failed at step: {failed_step}", file=sys.stderr)
+            if error.trace_artifact is not None:
+                print(f"Wrote {error.trace_artifact.path}", file=sys.stderr)
+            return 1
         print(f"AgentOps readiness score: {result.report.score}/100")
         for artifact in result.artifacts:
             print(f"Wrote {artifact.path}")
