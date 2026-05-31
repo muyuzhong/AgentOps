@@ -744,7 +744,7 @@ Record:
 
 Mark Phase 2 complete only after implementation and verification pass.
 
-- [ ] **Step 4: Update cross-session memory**
+- [x] **Step 4: Update cross-session memory**
 
 Record:
 
@@ -754,7 +754,7 @@ Record:
 - new trace artifact;
 - next step: write Phase 3 plan.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 
@@ -826,7 +826,7 @@ git status --short --ignored
 
 Expected: `.agentops/` appears only as ignored output.
 
-- [ ] **Step 6: Confirm a clean tracked worktree**
+- [x] **Step 6: Confirm a clean tracked worktree**
 
 Run:
 
