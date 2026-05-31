@@ -1,6 +1,15 @@
 """AgentOps Harness 公共数据模型。"""
 
 from agentops.core.artifact import Artifact, ArtifactKind
+from agentops.core.evidence import (
+    CIProfile,
+    ChangeKind,
+    ChangedFile,
+    DiffSummary,
+    GitStatus,
+    ShellResult,
+    TestResult,
+)
 from agentops.core.evaluation import Finding, ReadinessReport, Severity
 from agentops.core.recommendation import Recommendation, RecommendationKind
 from agentops.core.repo import RepoProfile
@@ -15,13 +24,20 @@ from agentops.core.workflow import (
 __all__ = [
     "Artifact",
     "ArtifactKind",
+    "CIProfile",
+    "ChangeKind",
+    "ChangedFile",
+    "DiffSummary",
     "Finding",
+    "GitStatus",
     "ReadinessReport",
     "Recommendation",
     "RecommendationKind",
     "RepoProfile",
     "Severity",
+    "ShellResult",
     "StepFailure",
+    "TestResult",
     "WorkflowEvent",
     "WorkflowEventType",
     "WorkflowStatus",
