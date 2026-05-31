@@ -56,3 +56,15 @@ def test_scan_command_writes_artifacts(
     output = capsys.readouterr().out
     assert "AgentOps readiness score:" in output
     assert "Wrote" in output
+
+
+def test_scan_command_uses_default_output_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["scan", "--repo", str(repo_path)]) == 0
+    assert (tmp_path / ".agentops" / "agentops-report.md").exists()
+    assert (tmp_path / ".agentops" / "agentops-score.json").exists()

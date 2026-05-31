@@ -3,6 +3,15 @@ from pathlib import Path
 from agentops.runtime.scan import run_scan
 
 
+def tree_snapshot(root: Path) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            path.relative_to(root).as_posix()
+            for path in root.rglob("*")
+        )
+    )
+
+
 def test_run_scan_orchestrates_repository_readiness_workflow(tmp_path: Path) -> None:
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
@@ -23,3 +32,22 @@ def test_run_scan_orchestrates_repository_readiness_workflow(tmp_path: Path) -> 
         "agentops-report.md",
         "agentops-score.json",
     }
+
+
+def test_run_scan_keeps_target_repository_read_only_and_output_stable(
+    tmp_path: Path,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "README.md").write_text("# 演示仓库", encoding="utf-8")
+    output_dir = tmp_path / "output"
+    before_tree = tree_snapshot(repo_path)
+
+    run_scan(repo_path, output_dir)
+    first_markdown = (output_dir / "agentops-report.md").read_bytes()
+    first_json = (output_dir / "agentops-score.json").read_bytes()
+    run_scan(repo_path, output_dir)
+
+    assert tree_snapshot(repo_path) == before_tree
+    assert (output_dir / "agentops-report.md").read_bytes() == first_markdown
+    assert (output_dir / "agentops-score.json").read_bytes() == first_json

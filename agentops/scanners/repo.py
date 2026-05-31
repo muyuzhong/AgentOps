@@ -42,7 +42,7 @@ class RepoScanner:
 
         return RepoProfile(
             root=repo_path,
-            has_readme=any((repo_path / name).exists() for name in README_FILES),
+            has_readme=any((repo_path / name).is_file() for name in README_FILES),
             constraint_files=constraint_files,
             test_directories=test_directories,
             ci_files=self._collect_ci_files(repo_path),
@@ -54,14 +54,14 @@ class RepoScanner:
     def _existing_paths(repo_path: Path, candidates: tuple[str, ...]) -> tuple[str, ...]:
         """按规则声明顺序返回存在的固定路径。"""
 
-        return tuple(name for name in candidates if (repo_path / name).exists())
+        return tuple(name for name in candidates if (repo_path / name).is_file())
 
     @staticmethod
     def _collect_ci_files(repo_path: Path) -> tuple[str, ...]:
         """枚举固定 CI 路径和 GitHub workflow 文件。"""
 
         ci_files = [
-            name for name in CI_FILES if (repo_path / name).exists()
+            name for name in CI_FILES if (repo_path / name).is_file()
         ]
         workflows_path = repo_path / ".github" / "workflows"
         if workflows_path.is_dir():
@@ -69,6 +69,7 @@ class RepoScanner:
                 ci_files.extend(
                     path.relative_to(repo_path).as_posix()
                     for path in workflows_path.glob(pattern)
+                    if path.is_file()
                 )
         return tuple(sorted(ci_files))
 
