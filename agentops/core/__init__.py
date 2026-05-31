@@ -13,6 +13,7 @@ from agentops.core.evidence import (
 from agentops.core.evaluation import Finding, ReadinessReport, Severity
 from agentops.core.recommendation import Recommendation, RecommendationKind
 from agentops.core.repo import RepoProfile
+from agentops.core.session import SessionTrace, TaskReport, VerificationRecord
 from agentops.core.workflow import (
     StepFailure,
     WorkflowEvent,
@@ -35,9 +36,12 @@ __all__ = [
     "RecommendationKind",
     "RepoProfile",
     "Severity",
+    "SessionTrace",
     "ShellResult",
     "StepFailure",
+    "TaskReport",
     "TestResult",
+    "VerificationRecord",
     "WorkflowEvent",
     "WorkflowEventType",
     "WorkflowStatus",
