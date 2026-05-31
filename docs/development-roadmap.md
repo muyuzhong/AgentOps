@@ -31,7 +31,7 @@ flowchart LR
 | --- | --- | --- | --- |
 | Phase 0 | 建立公共语言和工程骨架 | `agentops --help`、`agentops --version` | 已完成 |
 | Phase 1 | 打通仓库 readiness 扫描 | `agentops scan --repo <path>` | 已完成 |
-| Phase 2 | 显式建模确定性 workflow | pipeline 状态、事件、错误降级、trace | 计划已写好，下一步执行 |
+| Phase 2 | 显式建模确定性 workflow | pipeline 状态、事件、错误降级、trace | 执行中：Task 1-3 已完成 |
 | Phase 3 | 扩展分析工具层 | git、diff、CI、test、transcript、shell output 解析 | 待规划 |
 | Phase 4 | 评估单次 AI coding 过程 | `agentops eval`、上下文和边界诊断 | 待规划 |
 | Phase 5 | 沉淀仓库级经验 | 历史评测、失败模式、规则、skill 候选 | 待规划 |
@@ -50,7 +50,7 @@ docs/superpowers/plans/
 
 1. `2026-05-30-phase-0-core-scaffold.md`：已完成。
 2. `2026-05-30-phase-1-minimal-repo-scan.md`：已完成。
-3. `2026-05-31-phase-2-workflow-runtime.md`：下一步执行。
+3. `2026-05-31-phase-2-workflow-runtime.md`：执行中，Task 1-3 已完成，下一步 Task 4。
 
 每进入一个新阶段，先写一份新的纵向切片实施计划，再开始编码。
 
@@ -134,6 +134,8 @@ workflow models
 -> CLI integration
 -> docs
 ```
+
+当前已完成 workflow models、workflow runner 和 trace writer。下一步串行执行 scan integration。
 
 完成 workflow models 后，可以有限并行：
 

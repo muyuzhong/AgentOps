@@ -133,7 +133,7 @@ workflow_failed
 - Modify: `agentops/core/__init__.py`
 - Create: `tests/test_workflow_models.py`
 
-- [ ] **Step 1: Write failing model tests**
+- [x] **Step 1: Write failing model tests**
 
 Cover:
 
@@ -184,7 +184,7 @@ def test_workflow_trace_serializes_nested_events_and_failures() -> None:
 
 Also test that trace metadata becomes an ordinary JSON-friendly dictionary.
 
-- [ ] **Step 2: Run tests and confirm failure**
+- [x] **Step 2: Run tests and confirm failure**
 
 Run:
 
@@ -194,7 +194,7 @@ python -m pytest tests/test_workflow_models.py -v
 
 Expected: FAIL because `agentops.core.workflow` does not exist.
 
-- [ ] **Step 3: Implement workflow enums**
+- [x] **Step 3: Implement workflow enums**
 
 Define:
 
@@ -215,7 +215,7 @@ class WorkflowEventType(str, Enum):
     WORKFLOW_FAILED = "workflow_failed"
 ```
 
-- [ ] **Step 4: Implement trace dataclasses**
+- [x] **Step 4: Implement trace dataclasses**
 
 Define immutable dataclasses:
 
@@ -258,11 +258,11 @@ class WorkflowTrace:
 
 Use timezone-aware UTC timestamps. Convert metadata with `dict(self.metadata)` at the serialization boundary.
 
-- [ ] **Step 5: Export public workflow models**
+- [x] **Step 5: Export public workflow models**
 
 Update `agentops/core/__init__.py`.
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run:
 
@@ -272,7 +272,7 @@ python -m pytest tests/test_workflow_models.py -v
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 
@@ -288,7 +288,7 @@ git commit -m "feat: define workflow trace models"
 - Modify: `agentops/runtime/__init__.py`
 - Create: `tests/test_workflow_runtime.py`
 
-- [ ] **Step 1: Write failing success-path test**
+- [x] **Step 1: Write failing success-path test**
 
 Require:
 
@@ -326,7 +326,7 @@ def test_workflow_runner_executes_steps_in_order() -> None:
     ]
 ```
 
-- [ ] **Step 2: Write failing required-step failure test**
+- [x] **Step 2: Write failing required-step failure test**
 
 Require a required step exception to:
 
@@ -335,7 +335,7 @@ Require a required step exception to:
 - produce `STEP_FAILED` and `WORKFLOW_FAILED`;
 - return partial context without re-raising the original exception.
 
-- [ ] **Step 3: Write failing optional-step degradation test**
+- [x] **Step 3: Write failing optional-step degradation test**
 
 Require an optional step exception to:
 
@@ -343,7 +343,7 @@ Require an optional step exception to:
 - allow later steps to continue;
 - produce final status `COMPLETED_WITH_WARNINGS`.
 
-- [ ] **Step 4: Run tests and confirm failure**
+- [x] **Step 4: Run tests and confirm failure**
 
 Run:
 
@@ -353,7 +353,7 @@ python -m pytest tests/test_workflow_runtime.py -v
 
 Expected: FAIL because `WorkflowRunner` does not exist.
 
-- [ ] **Step 5: Implement runtime dataclasses**
+- [x] **Step 5: Implement runtime dataclasses**
 
 Define:
 
@@ -372,7 +372,7 @@ class WorkflowExecution:
     trace: WorkflowTrace
 ```
 
-- [ ] **Step 6: Implement `WorkflowRunner`**
+- [x] **Step 6: Implement `WorkflowRunner`**
 
 Constructor:
 
@@ -407,11 +407,11 @@ Rules:
 
 Do not catch `BaseException`; catch `Exception`.
 
-- [ ] **Step 7: Export runtime types**
+- [x] **Step 7: Export runtime types**
 
 Update `agentops/runtime/__init__.py`.
 
-- [ ] **Step 8: Run tests**
+- [x] **Step 8: Run tests**
 
 Run:
 
@@ -421,7 +421,7 @@ python -m pytest tests/test_workflow_runtime.py -v
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Run:
 
@@ -438,7 +438,7 @@ git commit -m "feat: add deterministic workflow runner"
 - Modify: `agentops/writers/__init__.py`
 - Create: `tests/test_trace_writer.py`
 
-- [ ] **Step 1: Write failing trace writer test**
+- [x] **Step 1: Write failing trace writer test**
 
 Require:
 
@@ -458,7 +458,7 @@ Also assert:
 - `indent=2`;
 - `sort_keys=True`.
 
-- [ ] **Step 2: Run tests and confirm failure**
+- [x] **Step 2: Run tests and confirm failure**
 
 Run:
 
@@ -468,7 +468,7 @@ python -m pytest tests/test_trace_writer.py -v
 
 Expected: FAIL because workflow trace artifacts do not exist.
 
-- [ ] **Step 3: Extend artifact kinds**
+- [x] **Step 3: Extend artifact kinds**
 
 Add:
 
@@ -476,7 +476,7 @@ Add:
 WORKFLOW_TRACE = "workflow_trace"
 ```
 
-- [ ] **Step 4: Implement `TraceWriter`**
+- [x] **Step 4: Implement `TraceWriter`**
 
 Define:
 
@@ -492,7 +492,7 @@ Write:
 agentops-trace.json
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -502,7 +502,7 @@ python -m pytest tests/test_trace_writer.py -v
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
@@ -870,4 +870,3 @@ Phase 2 is complete when:
 - Existing readiness artifacts remain deterministic.
 - Target repositories remain read-only.
 - `python -m pytest -v` passes.
-
