@@ -1,5 +1,10 @@
+import json
 from pathlib import Path
 
+import pytest
+
+from agentops.core.workflow import WorkflowEventType, WorkflowStatus
+from agentops.runtime import scan as scan_runtime
 from agentops.runtime.scan import run_scan
 
 
@@ -34,7 +39,21 @@ def test_run_scan_orchestrates_repository_readiness_workflow(tmp_path: Path) -> 
     assert {item.path.name for item in result.artifacts} == {
         "agentops-report.md",
         "agentops-score.json",
+        "agentops-trace.json",
     }
+    assert result.trace.status is WorkflowStatus.COMPLETED
+    assert [
+        event.step_name
+        for event in result.trace.events
+        if event.event_type is WorkflowEventType.STEP_COMPLETED
+    ] == [
+        "scan_repository",
+        "evaluate_readiness",
+        "write_readiness_artifacts",
+    ]
+    assert json.loads((output_dir / "agentops-trace.json").read_text(encoding="utf-8"))[
+        "status"
+    ] == "completed"
 
 
 def test_run_scan_keeps_target_repository_read_only_and_output_stable(
@@ -54,3 +73,35 @@ def test_run_scan_keeps_target_repository_read_only_and_output_stable(
     assert tree_snapshot(repo_path) == before_tree
     assert (output_dir / "agentops-report.md").read_bytes() == first_markdown
     assert (output_dir / "agentops-score.json").read_bytes() == first_json
+
+
+def test_run_scan_preserves_trace_after_required_step_failure(tmp_path: Path) -> None:
+    output_dir = tmp_path / "output"
+
+    with pytest.raises(scan_runtime.ScanWorkflowError) as exc_info:
+        run_scan(tmp_path / "missing", output_dir)
+
+    error = exc_info.value
+    assert error.trace.status is WorkflowStatus.FAILED
+    assert error.trace.failures[0].step_name == "scan_repository"
+    assert error.trace_artifact is not None
+    assert error.trace_artifact.path == output_dir / "agentops-trace.json"
+    assert json.loads(error.trace_artifact.path.read_text(encoding="utf-8"))[
+        "status"
+    ] == "failed"
+    assert not (output_dir / "agentops-report.md").exists()
+    assert not (output_dir / "agentops-score.json").exists()
+
+
+def test_run_scan_keeps_original_failure_when_trace_cannot_be_written(
+    tmp_path: Path,
+) -> None:
+    output_file = tmp_path / "output"
+    output_file.write_text("not a directory", encoding="utf-8")
+
+    with pytest.raises(scan_runtime.ScanWorkflowError) as exc_info:
+        run_scan(tmp_path / "missing", output_file)
+
+    error = exc_info.value
+    assert error.trace.failures[0].step_name == "scan_repository"
+    assert error.trace_artifact is None
