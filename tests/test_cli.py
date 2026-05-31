@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+import agentops.cli as cli_module
 from agentops.cli import build_parser, main
 
 
@@ -88,5 +89,22 @@ def test_scan_command_reports_structured_workflow_failure(
     )
 
     assert exit_code == 1
-    assert "scan_repository" in capsys.readouterr().err
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == (
+        "AgentOps scan failed at step: scan_repository\n"
+        f"Wrote {output_dir / 'agentops-trace.json'}\n"
+    )
     assert (output_dir / "agentops-trace.json").exists()
+
+
+def test_scan_command_does_not_hide_unexpected_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail_unexpectedly(repo_path: Path, output_dir: Path) -> None:
+        raise RuntimeError("unexpected failure")
+
+    monkeypatch.setattr(cli_module, "run_scan", fail_unexpectedly)
+
+    with pytest.raises(RuntimeError, match="unexpected failure"):
+        main(["scan", "--repo", str(tmp_path)])

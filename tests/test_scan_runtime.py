@@ -6,6 +6,8 @@ import pytest
 from agentops.core.workflow import WorkflowEventType, WorkflowStatus
 from agentops.runtime import scan as scan_runtime
 from agentops.runtime.scan import run_scan
+from agentops.writers.report import ReportWriter
+from agentops.writers.trace import TraceWriter
 
 
 def tree_snapshot(root: Path) -> tuple[tuple[str, bytes | None], ...]:
@@ -105,3 +107,45 @@ def test_run_scan_keeps_original_failure_when_trace_cannot_be_written(
     error = exc_info.value
     assert error.trace.failures[0].step_name == "scan_repository"
     assert error.trace_artifact is None
+
+
+def test_run_scan_propagates_trace_writer_failure_after_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    def fail_trace_write(
+        writer: TraceWriter, trace: object, output_dir: Path
+    ) -> object:
+        raise OSError("trace write failed")
+
+    monkeypatch.setattr(TraceWriter, "write", fail_trace_write)
+
+    with pytest.raises(OSError, match="trace write failed"):
+        run_scan(repo_path, tmp_path / "output")
+
+
+def test_run_scan_preserves_report_writer_failure_trace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    output_dir = tmp_path / "output"
+
+    def fail_report_write(
+        writer: ReportWriter, report: object, output_dir: Path
+    ) -> object:
+        raise OSError("report write failed")
+
+    monkeypatch.setattr(ReportWriter, "write", fail_report_write)
+
+    with pytest.raises(scan_runtime.ScanWorkflowError) as exc_info:
+        run_scan(repo_path, output_dir)
+
+    error = exc_info.value
+    assert error.trace.failures[0].step_name == "write_readiness_artifacts"
+    assert error.trace_artifact is not None
+    assert json.loads(error.trace_artifact.path.read_text(encoding="utf-8"))[
+        "status"
+    ] == "failed"
