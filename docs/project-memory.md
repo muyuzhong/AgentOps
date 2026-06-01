@@ -25,11 +25,13 @@
 ## 当前状态
 
 - 当前分支：`main`
-- 当前阶段：Phase 3 analysis tools 正在执行，Task 1 公共 evidence models、Task 2 有界 session models 和 Task 3 repository initializer 已完成。
+- 当前阶段：Phase 3 analysis tools 正在执行，Task 1 公共 evidence models、Task 2 有界 session models、Task 3 repository initializer 和 Task 4 init CLI 已完成。
 - 当前版本：`0.1.0`
 - 当前可用命令：
   - `agentops --help`
   - `agentops --version`
+  - `agentops init --repo <repo-path>`
+  - `agentops init --repo <repo-path> --session-log-policy <private|tracked|unmanaged>`
   - `agentops scan --repo <repo-path>`
   - `agentops scan --repo <repo-path> --output <output-path>`
 - 当前完整测试命令：
@@ -38,7 +40,7 @@
 python -m pytest -v
 ```
 
-- 最近一次确认的测试结果：2026-05-31 执行 `python -m pytest -v`，共 `103 passed`。
+- 最近一次确认的测试结果：2026-06-01 执行 `python -m pytest -v`，共 `115 passed`。
 
 ## 已完成能力
 
@@ -128,7 +130,12 @@ python -m pytest -v
 - 已支持 `private`、`tracked` 和 `unmanaged` 三种 session log 策略；只管理 `.agentops/.gitignore` 中的 AgentOps 托管块，不修改根 `.gitignore`。
 - 已按独立 marker 行识别托管块，保留块外用户内容和原始 CRLF/LF 风格；写入前完成路径与 marker 校验。
 - 文本写入使用同目录 staging 和 replace；staging 或 replace 失败时清理临时文件，并回滚已替换内容。
-- 尚未实现 Phase 3 后续 CLI、parser、analyzer 和 CI detector。
+- 已完成 Task 4 init CLI：
+  - `agentops init --repo <repo-path>`
+  - `agentops init --repo <repo-path> --session-log-policy <private|tracked|unmanaged>`
+- 显式策略跳过提示；未显式指定策略时，非交互 stdin 默认使用 `private`，交互式 stdin 提供三项编号选择。
+- CLI 仅将 initializer 的 `ValueError` 转换为简短初始化错误；意外异常继续向上传播。
+- 尚未实现 Phase 3 后续 parser、analyzer 和 CI detector。
 
 ## 当前文件边界
 
@@ -161,13 +168,13 @@ python -m pytest -v
 
 ## 下一步
 
-Phase 3 Task 3 已完成。下一步继续执行 Phase 3 analysis tools 实施计划中的 Task 4：
+Phase 3 Task 4 已完成。下一步继续执行 Phase 3 analysis tools 实施计划中的 Task 5：
 
 ```text
 docs/superpowers/plans/2026-05-31-phase-3-analysis-tools.md
 ```
 
-Task 4 将把 `agentops init --repo <repo-path>` 接入 CLI，解析交互或显式 session log policy，并保持现有 scan 行为不变。Phase 3 仍只负责确定性采集和规范化，不提前实现 `agentops eval`、质量评分或 LLM 摘要。
+Task 5 将增加 unified git diff parser，把修改、新增、删除、重命名和二进制文件元数据规范化为公共 diff evidence models。Phase 3 仍只负责确定性采集和规范化，不提前实现 `agentops eval`、质量评分或 LLM 摘要。
 
 ## 关键决策
 
@@ -198,6 +205,7 @@ Task 4 将把 `agentops init --repo <repo-path>` 接入 CLI，解析交互或显
 
 | 日期 | 提交 | 内容 |
 | --- | --- | --- |
+| 2026-06-01 | `4ef112a` | 暴露 `agentops init` CLI 和交互式 session log policy 解析 |
 | 2026-05-31 | `3364e97` | 实现显式 repository initializer、托管协议块和 session log 策略 |
 | 2026-05-31 | `9fa26cb` | 定义 Phase 3 有界 task report 和 session trace 模型 |
 | 2026-05-31 | `1be9ad0` | 定义 Phase 3 diff、git、CI、shell 和 test 公共 evidence models |
