@@ -25,7 +25,7 @@
 ## 当前状态
 
 - 当前分支：`main`
-- 当前阶段：Phase 3 analysis tools 正在执行，Task 1 公共 evidence models、Task 2 有界 session models、Task 3 repository initializer、Task 4 init CLI 和 Task 5 unified diff parser 已完成。
+- 当前阶段：Phase 3 analysis tools 正在执行，Task 1 公共 evidence models、Task 2 有界 session models、Task 3 repository initializer、Task 4 init CLI、Task 5 unified diff parser 和 Task 6 只读 GitAnalyzer 已完成。
 - 当前版本：`0.1.0`
 - 当前可用命令：
   - `agentops --help`
@@ -40,7 +40,7 @@
 python -m pytest -v
 ```
 
-- 最近一次确认的测试结果：2026-06-01 执行 `python -m pytest -v`，共 `126 passed`。
+- 最近一次确认的测试结果：2026-06-02 执行 `python -m pytest -v`，共 `137 passed`。
 
 ## 已完成能力
 
@@ -140,7 +140,13 @@ python -m pytest -v
 - diff parser 只解析输入文本，不调用 git；按源顺序输出修改、新增、删除、重命名和二进制文件证据。
 - 行数只在 `@@` hunk 内统计，忽略文件 header、上下文行和 `\ No newline at end of file`。
 - 已处理真实 Git 路径边界：空格、路径内嵌 ` b/`、quoted UTF-8 八进制转义，以及 rename 元数据解码。
-- 尚未实现 Phase 3 后续 GitAnalyzer、其他 parser 和 CI detector。
+- 已完成 Task 6 只读 GitAnalyzer：
+  - `GitAnalysisError`
+  - `GitAnalyzer`
+- GitAnalyzer 仅执行受控只读命令：`git rev-parse --show-toplevel`、`git branch --show-current`、`git status --porcelain=v1 --untracked-files=all` 和 `git diff --find-renames --no-ext-diff --unified=0 HEAD`。
+- `status()` 返回排序后的 POSIX 风格相对路径，并处理 quoted UTF-8 八进制路径、rename 引号外箭头切分、quoted POSIX 字面反斜杠和未 quoted Windows 风格分隔符。
+- `diff()` 复用 `DiffParser` 返回规范化 diff evidence；Git 子进程统一使用 UTF-8、`shell=False`，并将启动或命令失败封装为 `GitAnalysisError`。
+- 尚未实现 Phase 3 后续 CI detector 和其他 parser。
 
 ## 当前文件边界
 
@@ -155,6 +161,7 @@ python -m pytest -v
 | `agentops/core/session.py` | 有界任务日志的 session 证据模型 |
 | `agentops/core/workflow.py` | workflow 状态、事件、失败和 trace 模型 |
 | `agentops/initializers/repo.py` | 显式安装 session protocol、托管指令块和 session log 策略 |
+| `agentops/analyzers/git.py` | 通过受控只读 Git 子进程采集 branch、status 和规范化 diff |
 | `agentops/parsers/diff.py` | 将 unified git diff 规范化为公共 diff evidence models |
 | `agentops/scanners/repo.py` | 只读仓库扫描与测试命令推断 |
 | `agentops/evaluators/readiness.py` | 确定性 readiness 扣分规则 |
@@ -167,6 +174,7 @@ python -m pytest -v
 | `tests/test_evidence_models.py` | Phase 3 公共 evidence models 测试 |
 | `tests/test_session_models.py` | Phase 3 有界 session models 测试 |
 | `tests/test_repo_initializer.py` | Phase 3 repository initializer 测试 |
+| `tests/test_git_analyzer.py` | Phase 3 只读 GitAnalyzer 测试 |
 | `tests/test_diff_parser.py` | Phase 3 unified diff parser 测试 |
 | `tests/test_repo_scanner.py` | 仓库扫描器测试 |
 | `tests/test_readiness_evaluator.py` | readiness 评分规则测试 |
@@ -175,13 +183,13 @@ python -m pytest -v
 
 ## 下一步
 
-Phase 3 Task 5 已完成。下一步继续执行 Phase 3 analysis tools 实施计划中的 Task 6：
+Phase 3 Task 6 已完成。下一步继续执行 Phase 3 analysis tools 实施计划中的 Task 7：
 
 ```text
 docs/superpowers/plans/2026-05-31-phase-3-analysis-tools.md
 ```
 
-Task 6 将增加只读 GitAnalyzer，通过受控 git 子进程采集 branch、status 和 diff，并复用 `DiffParser` 做规范化。Phase 3 仍只负责确定性采集和规范化，不提前实现 `agentops eval`、质量评分或 LLM 摘要。
+Task 7 将增加只读 `CIDetector`，从已知 CI 配置中提取稳定的 config-file 和 validation-command evidence，并把 `validation_commands` 接入 `RepoProfile`。保留已有 marker-based `test_commands` 推断，不提前实现 Phase 3 Task 8 shell output parser。
 
 ## 关键决策
 
@@ -212,6 +220,7 @@ Task 6 将增加只读 GitAnalyzer，通过受控 git 子进程采集 branch、s
 
 | 日期 | 提交 | 内容 |
 | --- | --- | --- |
+| 2026-06-02 | `5c13ac7` | 通过受控只读 Git 子进程采集 branch、status 和规范化 diff evidence |
 | 2026-06-01 | `4907947` | 解析 unified git diff 并规范化真实 Git 路径边界 |
 | 2026-06-01 | `4ef112a` | 暴露 `agentops init` CLI 和交互式 session log policy 解析 |
 | 2026-05-31 | `3364e97` | 实现显式 repository initializer、托管协议块和 session log 策略 |
