@@ -5,9 +5,42 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Callable
 
 from agentops import __version__
+from agentops.initializers import SessionLogPolicy, run_init
 from agentops.runtime.scan import ScanWorkflowError, run_scan
+
+
+def resolve_session_log_policy(
+    explicit_policy: SessionLogPolicy | None,
+    *,
+    stdin_isatty: bool,
+    input_fn: Callable[[str], str] = input,
+) -> SessionLogPolicy:
+    """解析会话日志策略；非交互环境保守地保持本地私有。"""
+
+    if explicit_policy is not None:
+        return explicit_policy
+    if not stdin_isatty:
+        return SessionLogPolicy.PRIVATE
+
+    prompt = (
+        "Choose how AgentOps should manage .agentops/agentops-session.md:\n"
+        "1. private - keep the session log local\n"
+        "2. tracked - allow the repository to track the session log\n"
+        "3. unmanaged - leave ignore behavior unchanged\n"
+        "Selection [1-3]: "
+    )
+    policies = {
+        "1": SessionLogPolicy.PRIVATE,
+        "2": SessionLogPolicy.TRACKED,
+        "3": SessionLogPolicy.UNMANAGED,
+    }
+    while True:
+        answer = input_fn(prompt).strip()
+        if answer in policies:
+            return policies[answer]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,6 +58,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     scan_parser.add_argument("--repo", required=True, type=Path)
     scan_parser.add_argument("--output", type=Path, default=Path(".agentops"))
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Install the AgentOps task-log protocol in a repository.",
+    )
+    init_parser.add_argument("--repo", required=True, type=Path)
+    init_parser.add_argument(
+        "--session-log-policy",
+        choices=tuple(SessionLogPolicy),
+        type=SessionLogPolicy,
+    )
     return parser
 
 
@@ -49,6 +92,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"AgentOps readiness score: {result.report.score}/100")
         for artifact in result.artifacts:
             print(f"Wrote {artifact.path}")
+        return 0
+
+    if args.command == "init":
+        policy = resolve_session_log_policy(
+            args.session_log_policy,
+            stdin_isatty=sys.stdin.isatty(),
+        )
+        try:
+            result = run_init(args.repo, policy)
+        except ValueError as error:
+            print(f"AgentOps initialization failed: {error}", file=sys.stderr)
+            return 1
+        for path in result.changed_paths:
+            print(f"Wrote {path}")
         return 0
 
     parser.print_help()

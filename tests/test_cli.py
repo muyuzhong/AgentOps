@@ -1,9 +1,11 @@
+from io import StringIO
 from pathlib import Path
 
 import pytest
 
 import agentops.cli as cli_module
-from agentops.cli import build_parser, main
+from agentops.cli import build_parser, main, resolve_session_log_policy
+from agentops.initializers import SessionLogPolicy
 
 
 def test_cli_parser_has_program_description() -> None:
@@ -108,3 +110,167 @@ def test_scan_command_does_not_hide_unexpected_errors(
 
     with pytest.raises(RuntimeError, match="unexpected failure"):
         main(["scan", "--repo", str(tmp_path)])
+
+
+@pytest.mark.parametrize(
+    "policy",
+    [
+        SessionLogPolicy.PRIVATE,
+        SessionLogPolicy.TRACKED,
+        SessionLogPolicy.UNMANAGED,
+    ],
+)
+def test_init_command_accepts_explicit_session_log_policy(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    policy: SessionLogPolicy,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    exit_code = main(
+        [
+            "init",
+            "--repo",
+            str(repo_path),
+            "--session-log-policy",
+            policy.value,
+        ]
+    )
+
+    assert exit_code == 0
+    assert (repo_path / ".agentops" / "session-protocol.md").exists()
+    assert (repo_path / ".agentops" / "agentops-session.md").exists()
+    output = capsys.readouterr().out
+    assert f"Wrote {repo_path / '.agentops' / 'session-protocol.md'}" in output
+    assert f"Wrote {repo_path / '.agentops' / 'agentops-session.md'}" in output
+
+
+def test_init_command_defaults_to_private_policy_for_non_interactive_stdin(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    monkeypatch.setattr(cli_module.sys, "stdin", StringIO())
+
+    assert main(["init", "--repo", str(repo_path)]) == 0
+    assert "agentops-session.md" in (
+        repo_path / ".agentops" / ".gitignore"
+    ).read_text(encoding="utf-8")
+
+
+def test_resolve_session_log_policy_returns_explicit_policy_without_prompting() -> None:
+    def fail_if_prompted(prompt: str) -> str:
+        raise AssertionError(f"unexpected prompt: {prompt}")
+
+    assert (
+        resolve_session_log_policy(
+            SessionLogPolicy.TRACKED,
+            stdin_isatty=True,
+            input_fn=fail_if_prompted,
+        )
+        is SessionLogPolicy.TRACKED
+    )
+
+
+def test_resolve_session_log_policy_defaults_to_private_without_tty() -> None:
+    def fail_if_prompted(prompt: str) -> str:
+        raise AssertionError(f"unexpected prompt: {prompt}")
+
+    assert (
+        resolve_session_log_policy(
+            None,
+            stdin_isatty=False,
+            input_fn=fail_if_prompted,
+        )
+        is SessionLogPolicy.PRIVATE
+    )
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        ("1", SessionLogPolicy.PRIVATE),
+        ("2", SessionLogPolicy.TRACKED),
+        ("3", SessionLogPolicy.UNMANAGED),
+    ],
+)
+def test_resolve_session_log_policy_maps_interactive_choices(
+    answer: str,
+    expected: SessionLogPolicy,
+) -> None:
+    assert (
+        resolve_session_log_policy(
+            None,
+            stdin_isatty=True,
+            input_fn=lambda prompt: answer,
+        )
+        is expected
+    )
+
+
+def test_resolve_session_log_policy_reprompts_for_unsupported_answer() -> None:
+    answers = iter(["unsupported", "2"])
+    prompts: list[str] = []
+
+    def answer(prompt: str) -> str:
+        prompts.append(prompt)
+        return next(answers)
+
+    assert (
+        resolve_session_log_policy(None, stdin_isatty=True, input_fn=answer)
+        is SessionLogPolicy.TRACKED
+    )
+    assert len(prompts) == 2
+
+
+def test_init_command_reports_structured_initialization_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    missing_repo = tmp_path / "missing"
+
+    assert (
+        main(
+            [
+                "init",
+                "--repo",
+                str(missing_repo),
+                "--session-log-policy",
+                "private",
+            ]
+        )
+        == 1
+    )
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == (
+        "AgentOps initialization failed: "
+        "repository path must be an existing directory\n"
+    )
+    assert "Traceback" not in captured.err
+
+
+def test_init_command_does_not_hide_unexpected_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_unexpectedly(
+        repo_path: Path,
+        session_log_policy: SessionLogPolicy,
+    ) -> None:
+        raise RuntimeError("unexpected failure")
+
+    monkeypatch.setattr(cli_module, "run_init", fail_unexpectedly)
+
+    with pytest.raises(RuntimeError, match="unexpected failure"):
+        main(
+            [
+                "init",
+                "--repo",
+                str(tmp_path),
+                "--session-log-policy",
+                "private",
+            ]
+        )
