@@ -84,14 +84,24 @@ scan_repository -> evaluate_readiness -> write_readiness_artifacts
 离线会话评测流程：
 
 ```text
-Repo Scan
--> Session Parse
--> Evidence Normalize
--> Quality Evaluate
--> Diagnose
--> Recommend
--> Artifact Write
+TaskReport (agent 声明) ──┐
+                          ├── Reconcile ── Evaluate ── Diagnose ── Recommend ── Artifact Write
+DiffSummary + ExitCode ──┘   (对账)
 ```
+
+评测的核心不是"复述 agent 做了什么",而是"对账 agent 声称的和实际发生的"。agent 自述的 session md 是声明,git diff 和命令退出码是 agent 无法伪造的 ground truth,两者之间的差值才是诊断的核心信号。
+
+### 证据分层
+
+| 证据类型 | 来源 | agent 能否伪造 | 用途 |
+| --- | --- | --- | --- |
+| `TaskReport` | agent 自写 | 能 | 声明:agent 声称做了什么 |
+| `DiffSummary` | git diff | 不能 | 真相:实际改了什么 |
+| `ShellResult` | 命令执行 | 不能 | 真相:命令是否成功 |
+| `TestResult` | 测试框架输出 | 不能 | 真相:测试是否通过 |
+| `GitStatus` | git status | 不能 | 真相:当前仓库状态 |
+
+评估逻辑:拿 agent 不可控的真相去校验 agent 声称的声明。差值越大,诊断信号越强。
 
 ### 核心层
 
@@ -101,7 +111,7 @@ Repo Scan
 | `scanners/` | 只读扫描仓库结构、约束文件、CI 和测试线索 | Phase 1 已实现 |
 | `parsers/` | 解析 transcript、diff、shell output、测试结果 | 后续实现 |
 | `evaluators/` | 使用确定性规则生成评分和 Finding | Phase 1 已实现 readiness 规则 |
-| `recommenders/` | 根据 Finding 生成可执行建议 | 后续扩展 |
+| `recommenders/` | 诊断 Finding 并输出优化指引,不直接生成最终文本 | 后续扩展 |
 | `writers/` | 输出 Markdown、JSON 和建议草案 | Phase 2 已实现 readiness 与 workflow trace 产物 |
 | `runtime/` | 串联各模块，维护 workflow 状态和事件 | Phase 2 已实现 scan workflow 编排、错误隔离和 trace |
 
@@ -156,6 +166,37 @@ agentops scan --repo <repo-path>
 ```
 
 其中 `agentops-trace.json` 记录 workflow 步骤顺序、最终状态和失败信息。成功扫描和可写输出目录下的失败扫描都会保留 trace 证据。
+
+## 建议引擎设计
+
+建议引擎的核心原则:AgentOps 负责诊断,不负责执行改写。
+
+### CLAUDE.md 优化:加法与减法
+
+`CLAUDE.md` 每轮对话都会注入上下文,内容过多会挤占有效 token。优化必须同时做两件事:
+
+- **加法**:补充缺失的约束、验证命令、边界说明。
+- **减法**:移除教程性内容、冗余说明、应该放在 README 里的项目介绍。目标是保持在 200 行以内。
+
+建议引擎输出的是诊断结果（"缺什么""多什么""哪些该精简"）,不是最终文本。
+
+### Skill 渐进式披露
+
+优化指南以 skill 形式存在,包含:
+
+- `CLAUDE.md` 应该包含什么（项目约束、验证命令、边界、常见坑）。
+- `CLAUDE.md` 不应该包含什么（教程、冗余说明、通用最佳实践）。
+- 精简原则（每条规则不超过一行、用具体命令代替抽象描述）。
+
+这些指南通过渐进式披露按需加载:只在 agent 执行 `CLAUDE.md` 优化任务时注入上下文,日常 coding 时不加载。这避免了优化指南本身成为上下文污染。
+
+### 数据累积
+
+每次 eval 完成后,诊断结果追加到 `.agentops/eval-history.jsonl`。不实现完整的记忆系统,只是把数据先存下来。这样:
+
+- Phase 4 的 eval 本身就产出历史数据。
+- Phase 5 的记忆系统可以从这些历史数据中读取,而不是从零开始。
+- 用户从 Phase 4 开始就能看到"这个仓库的问题在恶化还是在改善"的趋势。
 
 ## 架构约束
 

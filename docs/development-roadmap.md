@@ -14,6 +14,19 @@
 - 每个 task 完成后运行相关测试。
 - 每个 milestone 完成后运行完整测试，并更新 `project-memory.md`。
 
+### 纵向探针（spike）
+
+当架构里存在未验证的关键假设时（例如"确定性规则在会话质量评估上是否够用"），不要等顺序推进到那个阶段才发现。用一条最薄的端到端切片提前打穿，目的不是交付功能，而是验证假设、暴露天花板。
+
+探针和正常 feature 切片的区别：
+
+- **目的**:验证假设，不是交付功能。
+- **范围**:只切一个维度，打穿所有层。
+- **质量**:可以硬编码、可以走捷径、验证完可以扔。
+- **产出**:不是代码，是答案——"确定性规则能走多远""LLM 从哪里开始是必需的""数据模型信号够不够"。
+
+探针完成后,基于答案决定下一阶段的架构,而不是凭假设设计。
+
 ## 总路线
 
 ```mermaid
@@ -21,7 +34,8 @@ flowchart LR
     P0["Phase 0<br/>Core Scaffold"] --> P1["Phase 1<br/>Repo Scan"]
     P1 --> P2["Phase 2<br/>Workflow Runtime"]
     P2 --> P3["Phase 3<br/>Analysis Tools"]
-    P3 --> P4["Phase 4<br/>Session Eval"]
+    P3 --> P35["Phase 3.5<br/>Eval Spike"]
+    P35 --> P4["Phase 4<br/>Session Eval"]
     P4 --> P5["Phase 5<br/>Repository Memory"]
     P5 --> P6["Phase 6<br/>Improvement Assets"]
     P6 --> P7["Phase 7<br/>Supervisory Loop"]
@@ -33,7 +47,8 @@ flowchart LR
 | Phase 1 | 打通仓库 readiness 扫描 | `agentops scan --repo <path>` | 已完成 |
 | Phase 2 | 显式建模确定性 workflow | pipeline 状态、事件、错误降级、trace | 已完成 |
 | Phase 3 | 扩展分析工具层 | `agentops init`、git、diff、CI、test、任务日志、shell output 解析 | 计划已写好，下一步执行 |
-| Phase 4 | 评估单次 AI coding 过程 | `agentops eval`、上下文和边界诊断 | 待规划 |
+| Phase 3.5 | 验证会话评测假设（纵向探针） | 一个维度的 scope drift 评估，验证确定性规则天花板和声明对账机制 | 待规划 |
+| Phase 4 | 评估单次 AI coding 过程 | `agentops eval`、上下文和边界诊断、`eval-history.jsonl` 数据累积 | 待规划 |
 | Phase 5 | 沉淀仓库级经验 | 历史评测、失败模式、规则、skill 候选 | 待规划 |
 | Phase 6 | 生成改进资产 | `CLAUDE.md`、`AGENTS.md`、hook 和流程建议 | 待规划 |
 | Phase 7 | 加入实时监督 | Watcher、监督型 loop、趋势分析 | 待规划 |
@@ -54,6 +69,10 @@ docs/superpowers/plans/
 4. `2026-05-31-phase-3-analysis-tools.md`：下一步执行。
 
 下一步：执行 Phase 3 analysis tools 实施计划。
+
+Phase 3 完成后,进入 Phase 3.5 纵向探针:用现有的 `TaskReport` + `DiffSummary`,实现一个维度的会话评估（scope drift）,纯确定性规则,标出"这里该插 LLM"的位置。探针同时验证两个假设：确定性规则在会话质量上能走多远；"agent 声明 vs diff 真相"对账机制是否跑得通。探针完成后,基于答案规划 Phase 4 架构。
+
+hook 集成优先级提前:整个评估链依赖 agent 按协议写 session md。没有 hook 保障,agent 可以不写声明,对账链就断。在 Phase 3.5 探针之前,先实现最小 hook——agent 停止时检查 `agentops-session.md` 是否有新追加内容,没有则输出提醒。这是声明链路的可靠性基础。
 
 每进入一个新阶段，先写一份新的纵向切片实施计划，再开始编码。
 

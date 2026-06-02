@@ -73,6 +73,17 @@ Workflow controls the process; supervisory loop watches the process; LLM enriche
 确定性工作流控制主流程，监督型循环观察实时过程，模型只增强诊断和建议。
 ```
 
+### 声明 vs 真相
+
+评估的核心不是"复述 agent 做了什么",而是"对账 agent 声称的和实际发生的"。
+
+- **声明（declaration）**:agent 自述的 session md——它声称做了什么、改了什么、验证了什么。agent 可以伪造。
+- **真相（ground truth）**:git diff、命令退出码、测试结果。agent 无法伪造。
+
+两者之间的差值才是诊断的核心信号。例如:md 说"只改了 login,无其他改动",diff 却显示 8 个文件横跨 3 个模块——这不仅是范围漂移,更是 agent 的自我认知失败。
+
+写 session md 时要诚实、要包含失败记录,因为 md 会被拿去和 diff/exit code 对账。
+
 ## 不要做什么
 
 本项目第一阶段明确不做：
@@ -190,9 +201,10 @@ agentops_harness/
 
 - `agentops-report.md`
 - `agentops-score.json`
-- `suggested-claude-md.md`
-- `suggested-agents-md.md`
+- `suggested-claude-md.md`（诊断结果：缺什么、多什么、哪些该精简,不是最终文本）
+- `suggested-agents-md.md`（同上）
 - `skill-candidates.md`
+- `eval-history.jsonl`（每次 eval 的诊断结果追加,用于趋势分析和 Phase 5 记忆系统）
 
 其中 `agentops-report.md` 是第一优先级。
 
@@ -201,14 +213,18 @@ agentops_harness/
 - 先做结构化数据，再做自然语言报告。
 - 代码中要明确包含中文注释
 - 先做确定性规则，再引入 LLM 辅助建议。
+- `CLAUDE.md` 优化不只是"加内容",也包括"做减法"。`CLAUDE.md` 每轮对话都会注入上下文,内容过多会挤占有效 token。优化目标是保持在 200 行以内,只保留项目特定的约束、验证命令和边界。AgentOps 输出诊断（缺什么、多什么、哪些该精简）,不直接生成最终文本；实际改写由 coding agent 通过 skill 形式的优化指南完成,优化指南通过渐进式披露按需加载。
 - 先做只读扫描和离线评估，再做自动修改。
 - 先支持单仓库、单会话，再扩展历史趋势和团队视图。
 - 每个阶段都必须能解释“这个能力如何让 AI coding 更稳定”。
 - 如果一个功能只是让项目看起来像普通 coding agent，应推迟或删除。
+- 当架构里存在未验证的关键假设时，用纵向探针（spike）提前验证：只切一个维度，打穿所有层，目的是验证假设而不是交付功能。探针可以硬编码、可以走捷径、验证完可以扔。基于探针答案定架构,不凭假设设计。
 
 ## 当前下一步
 
 Phase 2 workflow runtime 已完成。Phase 3 analysis tools 实施计划已写好，下一步按计划扩展初始化、证据采集和解析工具层。
+
+Phase 3 完成后,进入 Phase 3.5 纵向探针:用现有的 `TaskReport` + `DiffSummary`,实现一个维度的会话评估（scope drift）,纯确定性规则,标出"这里该插 LLM"的位置。探针同时验证两个假设：确定性规则在会话质量上能走多远；"agent 声明 vs diff 真相"对账机制是否跑得通。
 
 实施时依次执行：
 

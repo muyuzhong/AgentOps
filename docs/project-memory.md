@@ -207,6 +207,8 @@ Task 7 将增加只读 `CIDetector`，从已知 CI 配置中提取稳定的 conf
 - Phase 3 不默认读取完整聊天记录。coding agent 每完成一个独立任务后，向 `.agentops/agentops-session.md` 追加简短汇报；parser 只保留有界结构化证据和原文引用。
 - `agentops init` 是显式写操作。已有 `CLAUDE.md` 或 `AGENTS.md` 时追加托管协议块；两者同时存在时都更新；两者都不存在时创建或更新 `rule.md`。
 - `agentops init` 允许用户选择 session log 为 `private`、`tracked` 或 `unmanaged`；非交互环境未指定策略时默认 `private`。
+- agent 自述的 session md 定位为"声明"（declaration），不是"真相"。评估核心逻辑是拿声明和 ground truth（git diff、exit code）对账，差值才是诊断信号。这个原则决定了 Watcher 的机制设计和 Phase 4 的评估架构。
+- 确定性规则在 readiness（文件存在性）上有效，但在会话质量评估上的天花板尚不明确。需要通过纵向探针（spike）验证后才能定 Phase 4 架构，而不是凭假设设计。
 
 ## 已知限制和风险
 
@@ -215,6 +217,8 @@ Task 7 将增加只读 `CIDetector`，从已知 CI 配置中提取稳定的 conf
 - `ReadinessEvaluator` 当前信任内部 `RepoProfile` 已由 scanner 规范化；未来开放 SDK 前需要补充输入契约校验。
 - README 中列出的扫描和评测能力仍属于开发中能力。
 - 项目尚未确定正式 License。
+- 当前 readiness 评分是文件存在性检查，不是质量检查（有 `CLAUDE.md` 不等于 `CLAUDE.md` 有用）。权重（15/25/25/15/10/10）缺乏依据，需要在后续版本中升级为质量评估。
+- `WorkflowRunner` 对当前功能是"超配"的；它合理的前提是为 Phase 4–7 预投资。但如果 Phase 4 需要 LLM-in-the-loop 的非确定性编排，可能需要返工。
 
 ## 最近完成
 
