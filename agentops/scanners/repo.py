@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from agentops.core.repo import RepoProfile
+from agentops.scanners.ci import CIDetector
 
 README_FILES = ("README.md", "README.rst", "README.txt", "README")
 CONSTRAINT_FILES = ("AGENTS.md", "CLAUDE.md")
@@ -16,7 +17,6 @@ PROJECT_MARKERS = (
     "Cargo.toml",
     "go.mod",
 )
-CI_FILES = (".gitlab-ci.yml", "azure-pipelines.yml")
 TEST_COMMAND_RULES = (
     (("pyproject.toml", "requirements.txt"), "python -m pytest"),
     (("package.json",), "npm test"),
@@ -39,15 +39,18 @@ class RepoScanner:
             name for name in TEST_DIRECTORIES if (repo_path / name).is_dir()
         )
         project_markers = self._existing_paths(repo_path, PROJECT_MARKERS)
+        # 复用只读 CIDetector，统一 CI 配置文件识别与验证命令提取。
+        ci_profile = CIDetector().scan(repo_path)
 
         return RepoProfile(
             root=repo_path,
             has_readme=any((repo_path / name).is_file() for name in README_FILES),
             constraint_files=constraint_files,
             test_directories=test_directories,
-            ci_files=self._collect_ci_files(repo_path),
+            ci_files=ci_profile.config_files,
             project_markers=project_markers,
             test_commands=self._infer_test_commands(project_markers),
+            validation_commands=ci_profile.validation_commands,
         )
 
     @staticmethod
@@ -55,23 +58,6 @@ class RepoScanner:
         """按规则声明顺序返回存在的固定路径。"""
 
         return tuple(name for name in candidates if (repo_path / name).is_file())
-
-    @staticmethod
-    def _collect_ci_files(repo_path: Path) -> tuple[str, ...]:
-        """枚举固定 CI 路径和 GitHub workflow 文件。"""
-
-        ci_files = [
-            name for name in CI_FILES if (repo_path / name).is_file()
-        ]
-        workflows_path = repo_path / ".github" / "workflows"
-        if workflows_path.is_dir():
-            for pattern in ("*.yml", "*.yaml"):
-                ci_files.extend(
-                    path.relative_to(repo_path).as_posix()
-                    for path in workflows_path.glob(pattern)
-                    if path.is_file()
-                )
-        return tuple(sorted(ci_files))
 
     @staticmethod
     def _infer_test_commands(project_markers: tuple[str, ...]) -> tuple[str, ...]:

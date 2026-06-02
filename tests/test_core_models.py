@@ -28,6 +28,15 @@ def test_repo_profile_serializes_test_commands() -> None:
     assert profile.to_dict()["test_commands"] == ["python -m pytest"]
 
 
+def test_repo_profile_serializes_validation_commands() -> None:
+    profile = RepoProfile(
+        root=Path("demo"),
+        validation_commands=("python -m pytest",),
+    )
+
+    assert profile.to_dict()["validation_commands"] == ["python -m pytest"]
+
+
 def test_recommendation_exposes_actionable_fields() -> None:
     recommendation = Recommendation(
         kind=RecommendationKind.ADD_CONSTRAINT_FILE,

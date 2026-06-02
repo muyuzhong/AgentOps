@@ -49,3 +49,27 @@ def test_repo_scanner_does_not_count_directories_as_files(tmp_path: Path) -> Non
     assert profile.project_markers == ()
     assert profile.test_commands == ()
     assert profile.ci_files == ()
+
+
+def test_repo_scanner_collects_validation_commands(tmp_path: Path) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    workflows_path = repo_path / ".github" / "workflows"
+    workflows_path.mkdir(parents=True)
+    (workflows_path / "ci.yml").write_text(
+        "\n".join(
+            [
+                "jobs:",
+                "  build:",
+                "    steps:",
+                "      - run: python -m pytest",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    profile = RepoScanner().scan(repo_path)
+
+    assert profile.ci_files == (".github/workflows/ci.yml",)
+    assert profile.validation_commands == ("python -m pytest",)
