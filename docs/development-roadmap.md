@@ -46,7 +46,7 @@ flowchart LR
 | Phase 0 | 建立公共语言和工程骨架 | `agentops --help`、`agentops --version` | 已完成 |
 | Phase 1 | 打通仓库 readiness 扫描 | `agentops scan --repo <path>` | 已完成 |
 | Phase 2 | 显式建模确定性 workflow | pipeline 状态、事件、错误降级、trace | 已完成 |
-| Phase 3 | 扩展分析工具层 | `agentops init`、git、diff、CI、test、任务日志、shell output 解析 | 计划已写好，下一步执行 |
+| Phase 3 | 扩展分析工具层 | `agentops init`、git、diff、CI、test、任务日志、shell output 解析 | 已完成 |
 | Phase 3.5 | 验证会话评测假设（纵向探针） | 一个维度的 scope drift 评估，验证确定性规则天花板和声明对账机制 | 待规划 |
 | Phase 4 | 评估单次 AI coding 过程 | `agentops eval`、上下文和边界诊断、`eval-history.jsonl` 数据累积 | 待规划 |
 | Phase 5 | 沉淀仓库级经验 | 历史评测、失败模式、规则、skill 候选 | 待规划 |
@@ -66,9 +66,9 @@ docs/superpowers/plans/
 1. `2026-05-30-phase-0-core-scaffold.md`：已完成。
 2. `2026-05-30-phase-1-minimal-repo-scan.md`：已完成。
 3. `2026-05-31-phase-2-workflow-runtime.md`：已完成。
-4. `2026-05-31-phase-3-analysis-tools.md`：下一步执行。
+4. `2026-05-31-phase-3-analysis-tools.md`：已完成。
 
-下一步：执行 Phase 3 analysis tools 实施计划。
+下一步：编写 Phase 3.5 纵向探针实施计划（含最小 stop-hook），再开始编码。
 
 Phase 3 完成后,进入 Phase 3.5 纵向探针:用现有的 `TaskReport` + `DiffSummary`,实现一个维度的会话评估（scope drift）,纯确定性规则,标出"这里该插 LLM"的位置。探针同时验证两个假设：确定性规则在会话质量上能走多远；"agent 声明 vs diff 真相"对账机制是否跑得通。探针完成后,基于答案规划 Phase 4 架构。
 

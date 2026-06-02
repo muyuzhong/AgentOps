@@ -25,7 +25,7 @@
 ## 当前状态
 
 - 当前分支：`main`
-- 当前阶段：Phase 3 analysis tools 正在执行，Task 1 公共 evidence models、Task 2 有界 session models、Task 3 repository initializer、Task 4 init CLI、Task 5 unified diff parser 和 Task 6 只读 GitAnalyzer 已完成。
+- 当前阶段：Phase 3 analysis tools 已完成（Task 1–11）。在 Task 1–6 之外，新增 Task 7 CIDetector、Task 8 ShellOutputParser、Task 9 TranscriptParser，并完成文档更新与端到端验证。下一步：编写 Phase 3.5 纵向探针实施计划。
 - 当前版本：`0.1.0`
 - 当前可用命令：
   - `agentops --help`
@@ -40,7 +40,7 @@
 python -m pytest -v
 ```
 
-- 最近一次确认的测试结果：2026-06-02 执行 `python -m pytest -v`，共 `137 passed`。
+- 最近一次确认的测试结果：2026-06-03 执行 `python -m pytest -v`，共 `171 passed`。
 
 ## 已完成能力
 
@@ -146,7 +146,21 @@ python -m pytest -v
 - GitAnalyzer 仅执行受控只读命令：`git rev-parse --show-toplevel`、`git branch --show-current`、`git status --porcelain=v1 --untracked-files=all` 和 `git diff --find-renames --no-ext-diff --unified=0 HEAD`。
 - `status()` 返回排序后的 POSIX 风格相对路径，并处理 quoted UTF-8 八进制路径、rename 引号外箭头切分、quoted POSIX 字面反斜杠和未 quoted Windows 风格分隔符。
 - `diff()` 复用 `DiffParser` 返回规范化 diff evidence；Git 子进程统一使用 UTF-8、`shell=False`，并将启动或命令失败封装为 `GitAnalysisError`。
-- 尚未实现 Phase 3 后续 CI detector 和其他 parser。
+- 已完成 Task 7 只读 CIDetector：
+  - `CIScanError`
+  - `CIDetector`
+- CIDetector 只读已知 CI 路径（GitHub Actions、GitLab CI、Azure Pipelines），用 `yaml.safe_load` 保守提取验证命令：GitHub `jobs.*.steps[*].run`、GitLab 顶层与作业级 `before_script/script/after_script`、Azure `steps[*]` 与 `jobs[*].steps[*]` 的 `script/bash/powershell`。
+- 命令按配置文件排序提取，多行拆分、去空白、全局去重并保留首次出现顺序；不展开变量、不执行、不跟随 include。已为 `RepoProfile` 增加 `validation_commands` 并接入 `RepoScanner`，保持 `ci_files` 行为稳定。新增 `PyYAML>=6.0` 运行时依赖。
+- 已完成 Task 8 ShellOutputParser：
+  - `ShellOutputParser`
+- shell 成功只看退出码；摘要有界（`MAX_SHELL_SUMMARY_CHARS = 4000`），超出时保留首尾并插入确定性截断标记；两个流都有内容时加 `[stdout]`/`[stderr]` 标签。
+- 从完整未截断输出中保守识别 pytest 终端汇总（passed/failed/skipped/errors）为 `TestResult`；不匹配受支持格式时保持 unknown（`test_result is None`）。
+- 已完成 Task 9 TranscriptParser：
+  - `TranscriptParseError`
+  - `TranscriptParser`
+- TranscriptParser 增量解析 `.agentops/agentops-session.md`，校验必需章节（Goal/Changes/Verification）与 Command/Result 配对，拒绝重复章节和孤立 Command/Result。
+- 应用显式有界限额（`MAX_TASKS = 100`、`MAX_TASK_BYTES = 16384`、`MAX_FIELD_CHARS = 2000`、`MAX_LIST_ITEMS = 50`），命中限额时显式标记 truncated；只保留最新 MAX_TASKS 条并维持源顺序。
+- 绝不对整份日志调用 `read_text`，也绝不打开 Evidence References 指向的原始 transcript（按不透明指针保留）。
 
 ## 当前文件边界
 
@@ -163,7 +177,10 @@ python -m pytest -v
 | `agentops/initializers/repo.py` | 显式安装 session protocol、托管指令块和 session log 策略 |
 | `agentops/analyzers/git.py` | 通过受控只读 Git 子进程采集 branch、status 和规范化 diff |
 | `agentops/parsers/diff.py` | 将 unified git diff 规范化为公共 diff evidence models |
+| `agentops/parsers/shell_output.py` | 有界 shell 输出摘要与 pytest 摘要识别 |
+| `agentops/parsers/transcript.py` | 有界 agentops-session.md 任务日志解析为 SessionTrace |
 | `agentops/scanners/repo.py` | 只读仓库扫描与测试命令推断 |
+| `agentops/scanners/ci.py` | 只读 CI 配置检测与保守验证命令提取 |
 | `agentops/evaluators/readiness.py` | 确定性 readiness 扣分规则 |
 | `agentops/writers/report.py` | Markdown 和 JSON readiness 产物写出 |
 | `agentops/writers/trace.py` | JSON workflow trace 产物写出 |
@@ -176,6 +193,9 @@ python -m pytest -v
 | `tests/test_repo_initializer.py` | Phase 3 repository initializer 测试 |
 | `tests/test_git_analyzer.py` | Phase 3 只读 GitAnalyzer 测试 |
 | `tests/test_diff_parser.py` | Phase 3 unified diff parser 测试 |
+| `tests/test_ci_scanner.py` | Phase 3 CIDetector 测试 |
+| `tests/test_shell_output_parser.py` | Phase 3 ShellOutputParser 测试 |
+| `tests/test_transcript_parser.py` | Phase 3 TranscriptParser 测试 |
 | `tests/test_repo_scanner.py` | 仓库扫描器测试 |
 | `tests/test_readiness_evaluator.py` | readiness 评分规则测试 |
 | `tests/test_report_writer.py` | readiness 产物写出测试 |
@@ -183,13 +203,9 @@ python -m pytest -v
 
 ## 下一步
 
-Phase 3 Task 6 已完成。下一步继续执行 Phase 3 analysis tools 实施计划中的 Task 7：
+Phase 3 已全部完成（Task 1–11）并通过端到端验证。下一步：编写 Phase 3.5 纵向探针实施计划。
 
-```text
-docs/superpowers/plans/2026-05-31-phase-3-analysis-tools.md
-```
-
-Task 7 将增加只读 `CIDetector`，从已知 CI 配置中提取稳定的 config-file 和 validation-command evidence，并把 `validation_commands` 接入 `RepoProfile`。保留已有 marker-based `test_commands` 推断，不提前实现 Phase 3 Task 8 shell output parser。
+Phase 3.5 用现有的 `TaskReport` + `DiffSummary` 实现一个维度的会话评估（scope drift），纯确定性规则，标出"这里该插 LLM"的位置，验证确定性规则在会话质量上的天花板与"声明 vs 真相"对账机制。进入该阶段前先写一份实施计划；并按 roadmap 提前实现最小 stop-hook（agent 停止时检查 `agentops-session.md` 是否有新追加），保障声明链路可靠。
 
 ## 关键决策
 
@@ -209,10 +225,12 @@ Task 7 将增加只读 `CIDetector`，从已知 CI 配置中提取稳定的 conf
 - `agentops init` 允许用户选择 session log 为 `private`、`tracked` 或 `unmanaged`；非交互环境未指定策略时默认 `private`。
 - agent 自述的 session md 定位为"声明"（declaration），不是"真相"。评估核心逻辑是拿声明和 ground truth（git diff、exit code）对账，差值才是诊断信号。这个原则决定了 Watcher 的机制设计和 Phase 4 的评估架构。
 - 确定性规则在 readiness（文件存在性）上有效，但在会话质量评估上的天花板尚不明确。需要通过纵向探针（spike）验证后才能定 Phase 4 架构，而不是凭假设设计。
+- Phase 3 引入 `PyYAML>=6.0` 作为运行时依赖，仅用于 `yaml.safe_load` 解析受支持的 CI 配置；CI 命令提取保持保守，不实现通用 workflow 引擎、不展开变量、不执行命令。
+- CIDetector、ShellOutputParser、TranscriptParser 只采集和解析证据，不评分、不诊断、不调用 LLM；评分留到 Phase 3.5 及之后。
 
 ## 已知限制和风险
 
-- 当前没有 session parser、memory store 或 watcher。
+- 已具备 session（transcript）解析与 shell/CI/git 证据采集，但尚未接入评测 workflow；当前仍没有 memory store 或 watcher。
 - 当前 trace 只覆盖 repo scan workflow；后续 eval workflow 接入时需要复用相同事件和失败语义。
 - `ReadinessEvaluator` 当前信任内部 `RepoProfile` 已由 scanner 规范化；未来开放 SDK 前需要补充输入契约校验。
 - README 中列出的扫描和评测能力仍属于开发中能力。
@@ -224,6 +242,9 @@ Task 7 将增加只读 `CIDetector`，从已知 CI 配置中提取稳定的 conf
 
 | 日期 | 提交 | 内容 |
 | --- | --- | --- |
+| 2026-06-03 | `b6587ec` | 解析有界 agentops-session.md 任务日志为 SessionTrace |
+| 2026-06-03 | `20affc8` | 解析有界 shell 输出与 pytest 摘要为 ShellResult |
+| 2026-06-03 | `b4c2c0f` | 检测 CI 配置并保守提取验证命令 |
 | 2026-06-02 | `5c13ac7` | 通过受控只读 Git 子进程采集 branch、status 和规范化 diff evidence |
 | 2026-06-01 | `4907947` | 解析 unified git diff 并规范化真实 Git 路径边界 |
 | 2026-06-01 | `4ef112a` | 暴露 `agentops init` CLI 和交互式 session log policy 解析 |

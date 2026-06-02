@@ -28,7 +28,7 @@ The gap between the two is the core diagnostic signal. If the log says "only tou
 
 Available today:
 
-- **Repository readiness scanning**: Identify project structure, test commands, CI configuration, and agent instruction files, then emit a readiness score with actionable suggestions.
+- **Repository readiness scanning**: Identify project structure, test commands, CI configuration (including validation commands), and agent instruction files, then emit a readiness score with actionable suggestions.
 - **Repository initialization**: Install the session protocol and write a managed instruction block into `CLAUDE.md` / `AGENTS.md` so agents record their work in a known format.
 - **Workflow tracing**: Record deterministic scan steps and failures for inspection.
 

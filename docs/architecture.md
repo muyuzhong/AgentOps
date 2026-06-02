@@ -108,8 +108,10 @@ DiffSummary + ExitCode ──┘   (对账)
 | 模块 | 职责 | 第一版状态 |
 | --- | --- | --- |
 | `core/` | 定义稳定的领域模型和序列化契约 | 已建立基础模型 |
-| `scanners/` | 只读扫描仓库结构、约束文件、CI 和测试线索 | Phase 1 已实现 |
-| `parsers/` | 解析 transcript、diff、shell output、测试结果 | 后续实现 |
+| `scanners/` | 只读扫描仓库结构、约束文件、CI 和测试线索 | Phase 1 已实现；Phase 3 增加 CI 验证命令提取 |
+| `parsers/` | 解析 transcript、diff、shell output、测试结果 | Phase 3 已实现 diff、shell output、transcript 解析 |
+| `analyzers/` | 通过受控只读 Git 子进程采集 branch、status 和规范化 diff | Phase 3 已实现 GitAnalyzer |
+| `initializers/` | 显式安装 session protocol、托管指令块和 session log 策略 | Phase 3 已实现 |
 | `evaluators/` | 使用确定性规则生成评分和 Finding | Phase 1 已实现 readiness 规则 |
 | `recommenders/` | 诊断 Finding 并输出优化指引,不直接生成最终文本 | 后续扩展 |
 | `writers/` | 输出 Markdown、JSON 和建议草案 | Phase 2 已实现 readiness 与 workflow trace 产物 |
@@ -121,23 +123,28 @@ DiffSummary + ExitCode ──┘   (对账)
 
 | 模型 | 用途 |
 | --- | --- |
-| `RepoProfile` | 保存只读仓库扫描结果 |
+| `RepoProfile` | 保存只读仓库扫描结果（含 CI 验证命令） |
 | `Finding` | 保存带证据的诊断发现 |
 | `ReadinessReport` | 聚合仓库画像、评分、发现和建议 |
 | `Recommendation` | 保存可执行改进建议 |
 | `Artifact` | 描述生成的报告或结构化产物 |
 | `WorkflowTrace` | 保存 workflow 状态、生命周期事件和步骤失败 |
+| `DiffSummary` / `ChangedFile` | 保存规范化的 git diff 证据 |
+| `GitStatus` | 保存只读 git 状态采集结果 |
+| `CIProfile` | 保存 CI 配置文件和保守提取的验证命令 |
+| `ShellResult` / `TestResult` | 保存有界 shell 输出摘要和受支持的测试结果 |
+| `SessionTrace` / `TaskReport` / `VerificationRecord` | 保存有界任务日志的规范化证据 |
 
 后续按真实需求增加：
 
 | 模型 | 用途 |
 | --- | --- |
-| `SessionTrace` | 保存一次 AI coding 会话的规范化过程 |
-| `WorkEvidence` | 保存 diff、命令、测试和上下文证据 |
 | `EvalResult` | 保存单次工作过程的多维评测结果 |
 | `Intervention` | 保存实时监督循环给出的干预建议 |
 
 不要提前增加未被实际 workflow 使用的模型。
+
+Phase 3 分析工具的边界是“只采集和解析，不评分”：`agentops init` 是显式写操作；`TranscriptParser` 只读取有界的 `.agentops/agentops-session.md`，绝不展开 Evidence References 指向的原始 transcript；评分、诊断和建议留到 Phase 3.5 及之后。
 
 ## 第一条纵向切片
 
