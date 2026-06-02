@@ -203,9 +203,9 @@ python -m pytest -v
 
 ## 下一步
 
-Phase 3 已全部完成（Task 1–11）并通过端到端验证。下一步：编写 Phase 3.5 纵向探针实施计划。
+Phase 3 已全部完成（Task 1–11）并通过端到端验证。下一步：执行 Phase 3.5 纵向探针实施计划（`docs/superpowers/plans/2026-06-03-phase-3.5-eval-spike.md`）。
 
-Phase 3.5 用现有的 `TaskReport` + `DiffSummary` 实现一个维度的会话评估（scope drift），纯确定性规则，标出"这里该插 LLM"的位置，验证确定性规则在会话质量上的天花板与"声明 vs 真相"对账机制。进入该阶段前先写一份实施计划；并按 roadmap 提前实现最小 stop-hook（agent 停止时检查 `agentops-session.md` 是否有新追加），保障声明链路可靠。
+Phase 3.5 用现有的 `TaskReport` + `DiffSummary` 实现一个维度的会话评估（scope drift），纯确定性规则，标出"这里该插 LLM"的位置，验证确定性规则在会话质量上的天花板与"声明 vs 真相"对账机制。计划已写好；按计划先实现最小 stop-hook（agent 停止时检查 `agentops-session.md` 是否有新追加），保障声明链路可靠，再做 scope-drift 探针。
 
 ## 关键决策
 

@@ -224,13 +224,13 @@ agentops_harness/
 
 Phase 3 analysis tools 已完成：仓库初始化、公共 evidence/session 模型、unified diff parser、只读 GitAnalyzer、CIDetector、ShellOutputParser、TranscriptParser 全部落地，`python -m pytest` 共 171 passed。
 
-下一步进入 Phase 3.5 纵向探针:用现有的 `TaskReport` + `DiffSummary`,实现一个维度的会话评估（scope drift）,纯确定性规则,标出"这里该插 LLM"的位置。探针同时验证两个假设：确定性规则在会话质量上能走多远；"agent 声明 vs diff 真相"对账机制是否跑得通。进入该阶段前先写一份 Phase 3.5 实施计划。
+下一步进入 Phase 3.5 纵向探针:用现有的 `TaskReport` + `DiffSummary`,实现一个维度的会话评估（scope drift）,纯确定性规则,标出"这里该插 LLM"的位置。探针同时验证两个假设：确定性规则在会话质量上能走多远；"agent 声明 vs diff 真相"对账机制是否跑得通。实施计划见 `docs/superpowers/plans/2026-06-03-phase-3.5-eval-spike.md`。
 
 实施时依次执行：
 
 1. 阅读 `docs/project-memory.md`。
 2. 阅读 `docs/development-roadmap.md`，确认下一阶段边界。
-3. 先编写 Phase 3.5 纵向探针实施计划，再按计划执行。
+3. 执行 `docs/superpowers/plans/2026-06-03-phase-3.5-eval-spike.md`。
 
 每次只完成计划中的一个 Task，先写失败测试，再写最小实现，然后运行测试并提交。不要一次实现后续 Phase 的能力。
 
