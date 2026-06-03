@@ -34,6 +34,7 @@ def test_session_trace_serializes_bounded_task_reports(tmp_path: Path) -> None:
                 "goal": "Return 401 for expired tokens.",
                 "context_used": ["src/auth.py"],
                 "changes": ["Adjust expired-token mapping."],
+                "changed_files": [],
                 "verification": [
                     {
                         "command": "python -m pytest tests/test_auth.py -v",
@@ -64,10 +65,35 @@ def test_task_report_serializes_optional_lists_and_truncation() -> None:
         "goal": "Expose parser-ready task evidence.",
         "context_used": ["agentops/core/session.py"],
         "changes": ["Add immutable models."],
+        "changed_files": [],
         "verification": [],
         "issues": ["Retained only bounded evidence."],
         "evidence_references": [],
         "truncated": True,
+    }
+
+
+def test_task_report_serializes_changed_files() -> None:
+    report = TaskReport(
+        title="Declare changed files",
+        goal="Make declared paths explicit.",
+        changes=("Add changed_files field.",),
+        changed_files=("agentops/core/session.py", "tests/test_session_models.py"),
+    )
+
+    assert report.to_dict() == {
+        "title": "Declare changed files",
+        "goal": "Make declared paths explicit.",
+        "context_used": [],
+        "changes": ["Add changed_files field."],
+        "changed_files": [
+            "agentops/core/session.py",
+            "tests/test_session_models.py",
+        ],
+        "verification": [],
+        "issues": [],
+        "evidence_references": [],
+        "truncated": False,
     }
 
 

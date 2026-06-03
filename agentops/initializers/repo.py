@@ -45,6 +45,9 @@ SESSION_PROTOCOL = """# AgentOps 任务日志协议
 ### Changes
 - <完成的修改>
 
+### Changed Files
+- `<改动的文件路径>`
+
 ### Verification
 - Command: `<执行的命令>`
 - Result: `<简短结果>`

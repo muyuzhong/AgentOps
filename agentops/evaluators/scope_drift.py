@@ -69,9 +69,14 @@ def reconcile_scope(
 ) -> ScopeDriftReport:
     """对账声明与真相，返回确定性的 scope-drift 发现。"""
 
-    # 声明侧：从 context_used 和 changes 文本里抽取路径型 token。
+    # 声明侧：context_used 始终来自自由文本抽取。
     declared_context = _extract_paths(task_report.context_used)
-    declared_changes = _extract_paths(task_report.changes)
+    # changed_files 是 agent 的显式声明：存在时优先把它作为"声明改动集合"，
+    # 否则回退到从 changes 自由文本里抽取路径（兼容未升级协议的旧日志）。
+    if task_report.changed_files:
+        declared_changes = set(task_report.changed_files)
+    else:
+        declared_changes = _extract_paths(task_report.changes)
     declared_all = declared_context | declared_changes
 
     # 真相侧：diff 实际改动的路径（重命名取新路径）。

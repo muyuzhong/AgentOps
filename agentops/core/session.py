@@ -30,6 +30,8 @@ class TaskReport:
     goal: str
     context_used: tuple[str, ...] = ()
     changes: tuple[str, ...] = ()
+    # agent 显式声明改动的文件路径；对账时优先于从自由文本抽取的路径。
+    changed_files: tuple[str, ...] = ()
     verification: tuple[VerificationRecord, ...] = ()
     issues: tuple[str, ...] = ()
     evidence_references: tuple[str, ...] = ()
@@ -43,6 +45,7 @@ class TaskReport:
             "goal": self.goal,
             "context_used": list(self.context_used),
             "changes": list(self.changes),
+            "changed_files": list(self.changed_files),
             "verification": [record.to_dict() for record in self.verification],
             "issues": list(self.issues),
             "evidence_references": list(self.evidence_references),

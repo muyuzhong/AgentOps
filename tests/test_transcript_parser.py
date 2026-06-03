@@ -78,6 +78,27 @@ def test_transcript_parser_parses_valid_task(tmp_path: Path) -> None:
     assert task.truncated is False
 
 
+def test_transcript_parser_parses_changed_files(tmp_path: Path) -> None:
+    body = (
+        "## Task: T\n\n### Goal\ng\n\n"
+        "### Changes\n- adjust auth\n\n"
+        "### Changed Files\n- `src/auth.py`\n- `tests/test_auth.py`\n\n"
+        "### Verification\n- Command: `run`\n- Result: `ok`\n"
+    )
+
+    trace = TranscriptParser().parse(_session_file(tmp_path, body))
+
+    # 显式声明的改动路径应按源顺序解析，并剥掉包裹的反引号。
+    assert trace.tasks[0].changed_files == ("src/auth.py", "tests/test_auth.py")
+
+
+def test_transcript_parser_changed_files_optional(tmp_path: Path) -> None:
+    # 没有 Changed Files 段时，字段保持空元组（向前兼容旧日志）。
+    trace = TranscriptParser().parse(_session_file(tmp_path, VALID_TASK))
+
+    assert trace.tasks[0].changed_files == ()
+
+
 def test_transcript_parser_preserves_multiple_task_order(tmp_path: Path) -> None:
     body = "\n".join(MINIMAL_TASK.format(title=f"T{index}") for index in range(3))
 

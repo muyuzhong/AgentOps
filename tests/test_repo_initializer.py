@@ -35,6 +35,11 @@ def test_run_init_rejects_missing_repository_directory(tmp_path: Path) -> None:
         run_init(tmp_path / "missing", SessionLogPolicy.PRIVATE)
 
 
+def test_session_protocol_documents_changed_files_section() -> None:
+    # 协议模板必须包含显式的 Changed Files 列表段，供 agent 直接声明改动路径。
+    assert "### Changed Files" in SESSION_PROTOCOL
+
+
 def test_run_init_creates_protocol_session_log_rule_and_private_ignore(
     tmp_path: Path,
 ) -> None:

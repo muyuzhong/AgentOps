@@ -103,3 +103,33 @@ def test_basename_match_avoids_false_undeclared() -> None:
 
     assert all(f.code != "undeclared_change" for f in result.findings)
     assert result.findings == ()
+
+
+def test_reconcile_prefers_explicit_changed_files_over_free_text() -> None:
+    # changed_files 显式声明只改了 billing；自由文本却提到 auth。
+    # 真相只改了 billing：应优先用 changed_files，billing 不应被误报为未声明改动。
+    report = TaskReport(
+        title="t",
+        goal="g",
+        changes=("Updated src/auth.py only.",),
+        changed_files=("src/billing.py",),
+    )
+    result = reconcile_scope(report, _diff("src/billing.py"))
+
+    assert result.findings == ()
+
+
+def test_reconcile_flags_declared_not_changed_via_changed_files() -> None:
+    # changed_files 显式声明改了两个文件，diff 里只出现一个 → 另一个报 declared_not_changed。
+    report = TaskReport(
+        title="t",
+        goal="g",
+        changes=("done",),
+        changed_files=("src/auth.py", "src/missing.py"),
+    )
+    result = reconcile_scope(report, _diff("src/auth.py"))
+
+    assert any(
+        f.code == "declared_not_changed" and f.evidence == ("src/missing.py",)
+        for f in result.findings
+    )

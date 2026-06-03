@@ -24,6 +24,7 @@ _KNOWN_SECTIONS = (
     "Goal",
     "Context Used",
     "Changes",
+    "Changed Files",
     "Verification",
     "Issues",
     "Evidence References",
@@ -119,6 +120,12 @@ class TranscriptParser:
         )
         truncated = truncated or changes_truncated
 
+        # Changed Files 是可选的显式声明段；缺失时保持空元组。
+        changed_files, changed_files_truncated = self._clip_list(
+            self._list_items(sections.get("Changed Files", []))
+        )
+        truncated = truncated or changed_files_truncated
+
         issues, issues_truncated = self._clip_list(
             self._list_items(sections.get("Issues", []))
         )
@@ -139,6 +146,7 @@ class TranscriptParser:
             goal=goal,
             context_used=context_used,
             changes=changes,
+            changed_files=changed_files,
             verification=verification,
             issues=issues,
             evidence_references=references,
