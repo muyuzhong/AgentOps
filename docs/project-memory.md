@@ -25,7 +25,7 @@
 ## 当前状态
 
 - 当前分支：`main`
-- 当前阶段：Phase 3.5 纵向探针已完成（最小 stop-hook + scope-drift 对账探针），结论见 `docs/superpowers/findings/2026-06-03-scope-drift-spike.md`。Phase 3 analysis tools（Task 1–11）此前已完成。下一步：基于探针结论规划 Phase 4 会话评测。
+- 当前阶段：Phase 3.5 纵向探针已完成（最小 stop-hook + scope-drift 对账探针），结论见 `docs/superpowers/findings/2026-06-03-scope-drift-spike.md`。Phase 3 analysis tools（Task 1–11）此前已完成。Phase 4 会话评测实施计划已写好，下一步按计划执行（确定性 eval 先行，LLM intent seam 随后）。
 - 当前版本：`0.1.0`
 - 当前可用命令：
   - `agentops --help`
@@ -225,7 +225,7 @@ python -m pytest -v
 
 Phase 3.5 纵向探针已完成（stop-hook + scope-drift 对账），结论见 `docs/superpowers/findings/2026-06-03-scope-drift-spike.md`。
 
-下一步：基于探针结论规划 Phase 4 会话评测。探针关键结论：确定性规则可靠覆盖"文件集合"层（undeclared_change / declared_not_changed / cross_module_breadth），LLM 只需在 intent_alignment（判断差值是否属于任务意图）处引入；Phase 4 应升级任务日志协议增加显式 `### Changed Files`，并支持可配置 diff base。先写 Phase 4 实施计划，再编码。
+下一步：基于探针结论规划 Phase 4 会话评测。探针关键结论：确定性规则可靠覆盖"文件集合"层（undeclared_change / declared_not_changed / cross_module_breadth），LLM 只需在 intent_alignment（判断差值是否属于任务意图）处引入；Phase 4 应升级任务日志协议增加显式 `### Changed Files`，并支持可配置 diff base。Phase 4 实施计划见 `docs/superpowers/plans/2026-06-03-phase-4-session-eval.md`，下一步按计划执行。
 
 ## 关键决策
 

@@ -224,13 +224,13 @@ agentops_harness/
 
 Phase 3 analysis tools 已完成：仓库初始化、公共 evidence/session 模型、unified diff parser、只读 GitAnalyzer、CIDetector、ShellOutputParser、TranscriptParser 全部落地。Phase 3.5 纵向探针（stop-hook + scope-drift 对账）也已完成，`python -m pytest` 共 187 passed。
 
-Phase 3.5 探针结论见 `docs/superpowers/findings/2026-06-03-scope-drift-spike.md`：确定性规则可靠覆盖文件集合层的 scope drift，意图判断需 LLM。下一步进入 Phase 4 会话评测——把确定性对账作为第一道、LLM 只在 intent_alignment 介入，并升级任务日志协议（增加显式 `### Changed Files`）。进入前先写 Phase 4 实施计划。
+Phase 3.5 探针结论见 `docs/superpowers/findings/2026-06-03-scope-drift-spike.md`：确定性规则可靠覆盖文件集合层的 scope drift，意图判断需 LLM。下一步进入 Phase 4 会话评测——把确定性对账作为第一道、LLM 只在 intent_alignment 介入，并升级任务日志协议（增加显式 `### Changed Files`）。实施计划见 `docs/superpowers/plans/2026-06-03-phase-4-session-eval.md`。
 
 实施时依次执行：
 
 1. 阅读 `docs/project-memory.md`。
 2. 阅读 `docs/development-roadmap.md`，确认下一阶段边界。
-3. 先写 Phase 4 会话评测实施计划，再按计划执行。
+3. 执行 `docs/superpowers/plans/2026-06-03-phase-4-session-eval.md`。
 
 每次只完成计划中的一个 Task，先写失败测试，再写最小实现，然后运行测试并提交。不要一次实现后续 Phase 的能力。
 

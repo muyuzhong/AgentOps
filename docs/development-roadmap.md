@@ -68,7 +68,7 @@ docs/superpowers/plans/
 3. `2026-05-31-phase-2-workflow-runtime.md`：已完成。
 4. `2026-05-31-phase-3-analysis-tools.md`：已完成。
 
-下一步：基于 Phase 3.5 探针结论（`docs/superpowers/findings/2026-06-03-scope-drift-spike.md`）规划 Phase 4 会话评测，先写实施计划再编码。
+下一步：执行 Phase 4 会话评测实施计划（`docs/superpowers/plans/2026-06-03-phase-4-session-eval.md`）；确定性 eval 先行，LLM intent seam 留作随后一步。
 
 Phase 3 完成后,进入 Phase 3.5 纵向探针:用现有的 `TaskReport` + `DiffSummary`,实现一个维度的会话评估（scope drift）,纯确定性规则,标出"这里该插 LLM"的位置。探针同时验证两个假设：确定性规则在会话质量上能走多远；"agent 声明 vs diff 真相"对账机制是否跑得通。探针完成后,基于答案规划 Phase 4 架构。
 
