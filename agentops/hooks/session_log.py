@@ -72,6 +72,8 @@ def check_session_log(repo_path: Path) -> SessionLogCheck:
     """对比任务日志与上次记录的状态，判断是否有新追加，并刷新基线。"""
 
     repo_path = Path(repo_path)
+    if not repo_path.is_dir():
+        raise ValueError("repository directory does not exist")
     log_path = repo_path.joinpath(*SESSION_LOG_RELATIVE)
     state_path = repo_path.joinpath(*STATE_RELATIVE)
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable
 
 from agentops import __version__
+from agentops.hooks import check_session_log
 from agentops.initializers import SessionLogPolicy, run_init
 from agentops.runtime.scan import ScanWorkflowError, run_scan
 
@@ -68,6 +69,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=tuple(SessionLogPolicy),
         type=SessionLogPolicy,
     )
+    check_parser = subparsers.add_parser(
+        "check-session-log",
+        help="Remind when no new task report was appended to the session log.",
+    )
+    check_parser.add_argument("--repo", required=True, type=Path)
     return parser
 
 
@@ -107,6 +113,18 @@ def main(argv: list[str] | None = None) -> int:
         for path in result.changed_paths:
             print(f"Wrote {path}")
         return 0
+
+    if args.command == "check-session-log":
+        try:
+            result = check_session_log(args.repo)
+        except ValueError as error:
+            print(f"AgentOps check failed: {error}", file=sys.stderr)
+            return 1
+        if result.has_new_content:
+            return 0
+        # 没有新追加时把提醒写到 stderr，并以非零退出码提示调用方（如 Stop hook）。
+        print(result.reminder, file=sys.stderr)
+        return 1
 
     parser.print_help()
     return 0

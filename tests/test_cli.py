@@ -274,3 +274,65 @@ def test_init_command_does_not_hide_unexpected_errors(
                 "private",
             ]
         )
+
+
+CHECK_TASK = """## Task: T
+
+### Goal
+g
+
+### Changes
+- c
+
+### Verification
+- Command: `run`
+- Result: `ok`
+"""
+
+
+def test_check_session_log_returns_zero_after_new_append(tmp_path: Path) -> None:
+    repo_path = tmp_path / "repo"
+    log = repo_path / ".agentops" / "agentops-session.md"
+    log.parent.mkdir(parents=True)
+    log.write_text(CHECK_TASK, encoding="utf-8")
+
+    # 首次检查会记录基线并提醒；追加新任务后应返回 0。
+    main(["check-session-log", "--repo", str(repo_path)])
+    log.write_text(
+        CHECK_TASK + "\n" + CHECK_TASK.replace("## Task: T", "## Task: T2"),
+        encoding="utf-8",
+    )
+
+    assert main(["check-session-log", "--repo", str(repo_path)]) == 0
+
+
+def test_check_session_log_reminds_when_stale(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo_path = tmp_path / "repo"
+    log = repo_path / ".agentops" / "agentops-session.md"
+    log.parent.mkdir(parents=True)
+    log.write_text(CHECK_TASK, encoding="utf-8")
+
+    main(["check-session-log", "--repo", str(repo_path)])  # 记录基线
+    capsys.readouterr()  # 清空首次输出
+
+    exit_code = main(["check-session-log", "--repo", str(repo_path)])  # 内容未变
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "agentops-session.md" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_check_session_log_reports_missing_repo(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    exit_code = main(["check-session-log", "--repo", str(tmp_path / "missing")])
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "does not exist" in captured.err
+    assert "Traceback" not in captured.err
