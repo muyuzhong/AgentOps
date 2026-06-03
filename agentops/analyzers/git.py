@@ -123,8 +123,16 @@ class GitAnalyzer:
             untracked_paths=tuple(sorted(untracked_paths)),
         )
 
-    def diff(self, repo_path: Path) -> DiffSummary:
-        """返回相对 HEAD 的规范化工作区 diff。"""
+    def diff(self, repo_path: Path, base: str = "HEAD") -> DiffSummary:
+        """返回相对指定 base（默认 HEAD）的规范化工作区 diff。
+
+        base 可以是任意 git ref（提交、分支、标签、HEAD~1 等）；无效 ref 由 git
+        报错并统一封装为 GitAnalysisError。以 ``-`` 开头的值会被 git 当作选项，
+        属于参数注入风险，这里在执行前直接拒绝（保持 shell=False、参数受控）。
+        """
+
+        if not base or base.startswith("-"):
+            raise GitAnalysisError(f"invalid diff base: {base!r}")
 
         self._repo_root(repo_path)
         result = self._run_git(
@@ -133,6 +141,6 @@ class GitAnalyzer:
             "--find-renames",
             "--no-ext-diff",
             "--unified=0",
-            "HEAD",
+            base,
         )
         return DiffParser().parse(result.stdout)

@@ -151,6 +151,72 @@ def test_git_analyzer_parses_worktree_diff_with_diff_parser(tmp_path: Path) -> N
     assert summary.files[0].change_kind is ChangeKind.MODIFIED
 
 
+def test_git_analyzer_diff_accepts_configurable_base(tmp_path: Path) -> None:
+    # 基线提交：tracked.txt = "before\n"。
+    repo_path = _create_git_repo(tmp_path)
+    # 第二次提交：tracked.txt = "after\n"。
+    (repo_path / "tracked.txt").write_text("after\n", encoding="utf-8")
+    _run_git(repo_path, "add", "tracked.txt")
+    _run_git(repo_path, "commit", "-m", "second")
+    # 工作区再追加一行。
+    (repo_path / "tracked.txt").write_text("after\nextra\n", encoding="utf-8")
+
+    # 相对 HEAD（第二次提交）：只多出 extra 一行。
+    head_diff = GitAnalyzer().diff(repo_path)
+    assert head_diff.additions == 1
+    assert head_diff.deletions == 0
+
+    # 相对第一次提交（HEAD~1）：before -> after 再加 extra。
+    base_diff = GitAnalyzer().diff(repo_path, base="HEAD~1")
+    assert base_diff.additions == 2
+    assert base_diff.deletions == 1
+
+
+def test_git_analyzer_diff_passes_base_as_controlled_git_argument(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[tuple[str, ...]] = []
+
+    def return_git_result(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        command = tuple(args[1:])
+        captured.append(command)
+        stdout = str(tmp_path) if command[:1] == ("rev-parse",) else ""
+        return subprocess.CompletedProcess(args, returncode=0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(git_module.subprocess, "run", return_git_result)
+
+    GitAnalyzer().diff(tmp_path, base="origin/main")
+
+    # base 作为最后一个位置参数传入受控的 git diff 命令（保持 shell=False）。
+    assert (
+        "diff",
+        "--find-renames",
+        "--no-ext-diff",
+        "--unified=0",
+        "origin/main",
+    ) in captured
+
+
+def test_git_analyzer_diff_rejects_invalid_base(tmp_path: Path) -> None:
+    repo_path = _create_git_repo(tmp_path)
+
+    # 不存在的 ref 由 git 报错，统一封装为 GitAnalysisError。
+    with pytest.raises(GitAnalysisError):
+        GitAnalyzer().diff(repo_path, base="definitely-not-a-ref")
+
+
+def test_git_analyzer_diff_rejects_option_like_base(tmp_path: Path) -> None:
+    repo_path = _create_git_repo(tmp_path)
+
+    # 以 - 开头的 base 会被 git 当作选项，属于参数注入风险，直接拒绝。
+    with pytest.raises(GitAnalysisError, match="invalid diff base"):
+        GitAnalyzer().diff(repo_path, base="--output=x")
+
+
 def test_git_analyzer_rejects_missing_repository_directory(tmp_path: Path) -> None:
     with pytest.raises(GitAnalysisError, match="repository path must be an existing directory"):
         GitAnalyzer().status(tmp_path / "missing")
