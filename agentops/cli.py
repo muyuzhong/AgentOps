@@ -10,6 +10,7 @@ from typing import Callable
 from agentops import __version__
 from agentops.hooks import check_session_log
 from agentops.initializers import SessionLogPolicy, run_init
+from agentops.runtime.eval import EvalWorkflowError, run_eval
 from agentops.runtime.scan import ScanWorkflowError, run_scan
 
 
@@ -74,6 +75,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Remind when no new task report was appended to the session log.",
     )
     check_parser.add_argument("--repo", required=True, type=Path)
+    eval_parser = subparsers.add_parser(
+        "eval",
+        help="Evaluate the most recent task report against git truth.",
+    )
+    eval_parser.add_argument("--repo", required=True, type=Path)
+    eval_parser.add_argument("--session", type=Path, default=None)
+    eval_parser.add_argument("--diff-base", default="HEAD")
+    eval_parser.add_argument("--output", type=Path, default=Path(".agentops"))
     return parser
 
 
@@ -97,6 +106,35 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"AgentOps readiness score: {result.report.score}/100")
         for artifact in result.artifacts:
+            print(f"Wrote {artifact.path}")
+        return 0
+
+    if args.command == "eval":
+        # 未显式提供 --session 时回退到仓库内的默认任务日志。
+        session_path = (
+            args.session
+            if args.session is not None
+            else args.repo / ".agentops" / "agentops-session.md"
+        )
+        try:
+            run = run_eval(
+                args.repo,
+                session_path,
+                args.output,
+                diff_base=args.diff_base,
+            )
+        except EvalWorkflowError as error:
+            failed_step = (
+                error.trace.failures[0].step_name
+                if error.trace.failures
+                else "unknown"
+            )
+            print(f"AgentOps eval failed at step: {failed_step}", file=sys.stderr)
+            if error.trace_artifact is not None:
+                print(f"Wrote {error.trace_artifact.path}", file=sys.stderr)
+            return 1
+        print(f"AgentOps scope-discipline score: {run.result.score}/100")
+        for artifact in run.artifacts:
             print(f"Wrote {artifact.path}")
         return 0
 

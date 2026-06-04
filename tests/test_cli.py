@@ -1,5 +1,7 @@
 from io import StringIO
 from pathlib import Path
+import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -336,3 +338,167 @@ def test_check_session_log_reports_missing_repo(
     assert captured.out == ""
     assert "does not exist" in captured.err
     assert "Traceback" not in captured.err
+
+
+_EVAL_SESSION = """## Task: Fix login
+
+### Goal
+g
+
+### Changes
+- c
+
+### Changed Files
+- `src/auth.py`
+
+### Verification
+- Command: `run`
+- Result: `ok`
+"""
+
+
+def _eval_git(repo_path: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", *args],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        shell=False,
+    )
+
+
+def _eval_repo(tmp_path: Path) -> Path:
+    """创建一个含基线提交、并带一处已声明工作区改动的 git 仓库。"""
+
+    repo_path = tmp_path / "repo"
+    (repo_path / "src").mkdir(parents=True)
+    _eval_git(repo_path, "init")
+    _eval_git(repo_path, "config", "user.email", "agentops@example.com")
+    _eval_git(repo_path, "config", "user.name", "AgentOps Test")
+    (repo_path / "src" / "auth.py").write_text("before\n", encoding="utf-8")
+    _eval_git(repo_path, "add", "src/auth.py")
+    _eval_git(repo_path, "commit", "-m", "baseline")
+    # 工作区改动（已在会话日志里声明），相对 HEAD 即为真相。
+    (repo_path / "src" / "auth.py").write_text("after\n", encoding="utf-8")
+    return repo_path
+
+
+def test_eval_command_writes_artifacts_and_prints_score(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo_path = _eval_repo(tmp_path)
+    # 默认会话路径：<repo>/.agentops/agentops-session.md。
+    session = repo_path / ".agentops" / "agentops-session.md"
+    session.parent.mkdir(parents=True, exist_ok=True)
+    session.write_text(_EVAL_SESSION, encoding="utf-8")
+    output_dir = tmp_path / "out"
+
+    exit_code = main(["eval", "--repo", str(repo_path), "--output", str(output_dir)])
+
+    assert exit_code == 0
+    assert (output_dir / "agentops-report.md").exists()
+    assert (output_dir / "agentops-score.json").exists()
+    assert (output_dir / "agentops-trace.json").exists()
+    assert (output_dir / "eval-history.jsonl").exists()
+    output = capsys.readouterr().out
+    # 声明与真相一致：满分。
+    assert "AgentOps scope-discipline score: 100/100" in output
+    assert "Wrote" in output
+
+
+def test_eval_command_honors_custom_session_and_output(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo_path = _eval_repo(tmp_path)
+    session = tmp_path / "custom-session.md"
+    session.write_text(_EVAL_SESSION, encoding="utf-8")
+    output_dir = tmp_path / "custom-out"
+
+    exit_code = main(
+        [
+            "eval",
+            "--repo",
+            str(repo_path),
+            "--session",
+            str(session),
+            "--output",
+            str(output_dir),
+        ]
+    )
+
+    assert exit_code == 0
+    assert (output_dir / "agentops-score.json").exists()
+
+
+def test_eval_command_forwards_diff_base_to_run_eval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    captured: dict[str, object] = {}
+
+    def capture_run_eval(
+        repo_path: Path,
+        session_path: Path,
+        output_dir: Path,
+        *,
+        diff_base: str = "HEAD",
+        **kwargs: object,
+    ) -> object:
+        captured.update(
+            repo=repo_path,
+            session=session_path,
+            output=output_dir,
+            diff_base=diff_base,
+        )
+        return SimpleNamespace(result=SimpleNamespace(score=100), artifacts=())
+
+    monkeypatch.setattr(cli_module, "run_eval", capture_run_eval)
+
+    exit_code = main(
+        [
+            "eval",
+            "--repo",
+            str(tmp_path / "repo"),
+            "--diff-base",
+            "HEAD~1",
+            "--output",
+            str(tmp_path / "out"),
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured["diff_base"] == "HEAD~1"
+    # 未显式提供 --session 时回退到 <repo>/.agentops/agentops-session.md。
+    assert captured["session"] == tmp_path / "repo" / ".agentops" / "agentops-session.md"
+
+
+def test_eval_command_reports_structured_workflow_failure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output_dir = tmp_path / "out"
+
+    # 仓库缺失时其默认会话也缺失，解析步骤失败，应是结构化错误而非 traceback。
+    exit_code = main(
+        ["eval", "--repo", str(tmp_path / "missing"), "--output", str(output_dir)]
+    )
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "AgentOps eval failed at step: parse_session" in captured.err
+    assert "Traceback" not in captured.err
+    assert (output_dir / "agentops-trace.json").exists()
+
+
+def test_eval_command_does_not_hide_unexpected_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail_unexpectedly(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("unexpected failure")
+
+    monkeypatch.setattr(cli_module, "run_eval", fail_unexpectedly)
+
+    with pytest.raises(RuntimeError, match="unexpected failure"):
+        main(["eval", "--repo", str(tmp_path), "--output", str(tmp_path / "out")])
+
