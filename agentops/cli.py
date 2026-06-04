@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Callable
@@ -10,8 +11,14 @@ from typing import Callable
 from agentops import __version__
 from agentops.hooks import check_session_log
 from agentops.initializers import SessionLogPolicy, run_init
+from agentops.judges import IntentJudge, LLMIntentJudge
+from agentops.llm import LLMClient, LLMError, OpenAICompatibleClient
 from agentops.runtime.eval import EvalWorkflowError, run_eval
 from agentops.runtime.scan import ScanWorkflowError, run_scan
+
+# --intent-judge llm 默认指向的 OpenAI 兼容端点（mimo）；可用 --intent-base-url /
+# AGENTOPS_LLM_BASE_URL 覆盖。仅是默认端点，不是写死的模型层级。
+DEFAULT_LLM_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
 
 
 def resolve_session_log_policy(
@@ -83,7 +90,69 @@ def build_parser() -> argparse.ArgumentParser:
     eval_parser.add_argument("--session", type=Path, default=None)
     eval_parser.add_argument("--diff-base", default="HEAD")
     eval_parser.add_argument("--output", type=Path, default=Path(".agentops"))
+    eval_parser.add_argument(
+        "--intent-judge",
+        choices=("deterministic", "llm"),
+        default="deterministic",
+        help="Intent verdict source: deterministic (default, offline) or llm (opt-in).",
+    )
+    eval_parser.add_argument(
+        "--intent-model",
+        default=None,
+        help="Model id for --intent-judge llm (e.g. mimo-v2.5-pro).",
+    )
+    eval_parser.add_argument(
+        "--intent-base-url",
+        default=None,
+        help="OpenAI-compatible base URL for --intent-judge llm "
+        "(default: $AGENTOPS_LLM_BASE_URL or the bundled mimo endpoint).",
+    )
     return parser
+
+
+def _build_llm_client(args: argparse.Namespace) -> LLMClient:
+    """构造 LLM 客户端；缺 key 抛 LLMError 交由调用方降级。
+
+    单独抽成可打补丁的工厂：CLI 测试 monkeypatch 此函数注入 stub，绝不触网。
+    base_url 与 api_key 走 CLI flag / 环境变量；model 由 --intent-model 提供。
+    """
+
+    base_url = (
+        args.intent_base_url
+        or os.environ.get("AGENTOPS_LLM_BASE_URL")
+        or DEFAULT_LLM_BASE_URL
+    )
+    api_key = os.environ.get("AGENTOPS_LLM_API_KEY")
+    if not api_key:
+        raise LLMError("AGENTOPS_LLM_API_KEY is not set")
+    return OpenAICompatibleClient(
+        model=args.intent_model, base_url=base_url, api_key=api_key
+    )
+
+
+def _resolve_intent_judge(
+    args: argparse.Namespace,
+) -> tuple[IntentJudge | None, str | None]:
+    """把 CLI 参数解析为（judge, 降级提示）。
+
+    返回 ``None`` 表示走 run_eval 的确定性默认路径（与 Phase 4 完全一致）。请求
+    ``llm`` 但缺 --intent-model 或客户端无法构造时，返回确定性默认并给出一行提示，
+    让评测照常以退出码 0 完成。
+    """
+
+    if getattr(args, "intent_judge", "deterministic") != "llm":
+        return None, None
+    if not args.intent_model:
+        return None, (
+            "agentops: intent judge fell back to deterministic (no --intent-model)"
+        )
+    try:
+        client = _build_llm_client(args)
+    except LLMError as error:
+        return None, (
+            f"agentops: intent judge fell back to deterministic ({error})"
+        )
+    return LLMIntentJudge(client), None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -116,12 +185,17 @@ def main(argv: list[str] | None = None) -> int:
             if args.session is not None
             else args.repo / ".agentops" / "agentops-session.md"
         )
+        # 解析意图判官：默认确定性；--intent-judge llm 不可用时降级并给出一行提示。
+        intent_judge, fallback_notice = _resolve_intent_judge(args)
+        if fallback_notice is not None:
+            print(fallback_notice, file=sys.stderr)
         try:
             run = run_eval(
                 args.repo,
                 session_path,
                 args.output,
                 diff_base=args.diff_base,
+                intent_judge=intent_judge,
             )
         except EvalWorkflowError as error:
             failed_step = (

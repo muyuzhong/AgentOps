@@ -1,5 +1,6 @@
 from io import StringIO
 from pathlib import Path
+import json
 import subprocess
 from types import SimpleNamespace
 
@@ -8,6 +9,7 @@ import pytest
 import agentops.cli as cli_module
 from agentops.cli import build_parser, main, resolve_session_log_policy
 from agentops.initializers import SessionLogPolicy
+from agentops.llm.client import LLMError, LLMResponse
 
 
 def test_cli_parser_has_program_description() -> None:
@@ -501,4 +503,163 @@ def test_eval_command_does_not_hide_unexpected_errors(
 
     with pytest.raises(RuntimeError, match="unexpected failure"):
         main(["eval", "--repo", str(tmp_path), "--output", str(tmp_path / "out")])
+
+
+def _eval_repo_with_undeclared(tmp_path: Path) -> Path:
+    """在 _eval_repo 基础上新增一个未声明、已暂存的 src/billing.py。"""
+
+    repo_path = _eval_repo(tmp_path)
+    (repo_path / "src" / "billing.py").write_text("new\n", encoding="utf-8")
+    _eval_git(repo_path, "add", "src/billing.py")
+    return repo_path
+
+
+def _write_default_session(repo_path: Path) -> None:
+    session = repo_path / ".agentops" / "agentops-session.md"
+    session.parent.mkdir(parents=True, exist_ok=True)
+    session.write_text(_EVAL_SESSION, encoding="utf-8")
+
+
+class _StubLLMClient:
+    """回放固定 drift 裁决的 LLMClient 替身，供 CLI 测试注入（不触网）。"""
+
+    def complete(self, request: object) -> LLMResponse:
+        return LLMResponse(
+            text=json.dumps(
+                [
+                    {
+                        "finding_code": "undeclared_change",
+                        "evidence": ["src/billing.py"],
+                        "verdict": "drift",
+                        "rationale": "billing is unrelated",
+                    }
+                ]
+            )
+        )
+
+
+def test_eval_command_uses_llm_intent_judge_via_factory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo_path = _eval_repo_with_undeclared(tmp_path)
+    _write_default_session(repo_path)
+    output_dir = tmp_path / "out"
+    # monkeypatch 工厂注入 stub 客户端：CLI 测试绝不触网。
+    monkeypatch.setattr(cli_module, "_build_llm_client", lambda args: _StubLLMClient())
+
+    exit_code = main(
+        [
+            "eval",
+            "--repo",
+            str(repo_path),
+            "--output",
+            str(output_dir),
+            "--intent-judge",
+            "llm",
+            "--intent-model",
+            "mimo-v2.5-pro",
+        ]
+    )
+
+    assert exit_code == 0
+    score_data = json.loads(
+        (output_dir / "agentops-score.json").read_text(encoding="utf-8")
+    )
+    verdicts = score_data["intent_verdicts"]
+    assert any(verdict["source"] == "llm" for verdict in verdicts)
+    assert any(verdict["verdict"] == "drift" for verdict in verdicts)
+    # 裁决不移动分数：未声明改动仍扣 15。
+    assert score_data["score"] == 85
+
+
+def test_eval_command_default_uses_deterministic_judge(tmp_path: Path) -> None:
+    repo_path = _eval_repo_with_undeclared(tmp_path)
+    _write_default_session(repo_path)
+    output_dir = tmp_path / "out"
+
+    exit_code = main(["eval", "--repo", str(repo_path), "--output", str(output_dir)])
+
+    assert exit_code == 0
+    score_data = json.loads(
+        (output_dir / "agentops-score.json").read_text(encoding="utf-8")
+    )
+    verdicts = score_data["intent_verdicts"]
+    assert verdicts
+    assert all(verdict["source"] == "deterministic" for verdict in verdicts)
+
+
+def test_eval_command_llm_without_model_falls_back(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo_path = _eval_repo_with_undeclared(tmp_path)
+    _write_default_session(repo_path)
+    output_dir = tmp_path / "out"
+
+    exit_code = main(
+        [
+            "eval",
+            "--repo",
+            str(repo_path),
+            "--output",
+            str(output_dir),
+            "--intent-judge",
+            "llm",
+        ]
+    )
+
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "fell back to deterministic" in captured.err
+    assert "no --intent-model" in captured.err
+    # 仍然产出确定性裁决。
+    score_data = json.loads(
+        (output_dir / "agentops-score.json").read_text(encoding="utf-8")
+    )
+    assert all(v["source"] == "deterministic" for v in score_data["intent_verdicts"])
+
+
+def test_eval_command_llm_unconstructable_client_falls_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo_path = _eval_repo_with_undeclared(tmp_path)
+    _write_default_session(repo_path)
+
+    def boom(args: object) -> object:
+        raise LLMError("missing API key")
+
+    monkeypatch.setattr(cli_module, "_build_llm_client", boom)
+
+    exit_code = main(
+        [
+            "eval",
+            "--repo",
+            str(repo_path),
+            "--output",
+            str(tmp_path / "out"),
+            "--intent-judge",
+            "llm",
+            "--intent-model",
+            "mimo-v2.5-pro",
+        ]
+    )
+
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "fell back to deterministic" in captured.err
+    assert "missing API key" in captured.err
+
+
+def test_eval_command_rejects_unknown_intent_judge(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(
+            [
+                "eval",
+                "--repo",
+                str(tmp_path / "repo"),
+                "--intent-judge",
+                "bogus",
+            ]
+        )
+
+    assert exc_info.value.code == 2
 
