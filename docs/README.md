@@ -25,7 +25,7 @@
 | `superpowers/plans/2026-05-31-phase-2-workflow-runtime.md` | 已完成 |
 | `superpowers/plans/2026-05-31-phase-3-analysis-tools.md` | 已完成 |
 | `superpowers/plans/2026-06-03-phase-3.5-eval-spike.md` | 已完成 |
-| `superpowers/plans/2026-06-03-phase-4-session-eval.md` | 下一步执行 |
+| `superpowers/plans/2026-06-03-phase-4-session-eval.md` | 已完成 |
 
 探针结论保存在 `superpowers/findings/`（例如 `superpowers/findings/2026-06-03-scope-drift-spike.md`）。
 

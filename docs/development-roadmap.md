@@ -48,7 +48,7 @@ flowchart LR
 | Phase 2 | 显式建模确定性 workflow | pipeline 状态、事件、错误降级、trace | 已完成 |
 | Phase 3 | 扩展分析工具层 | `agentops init`、git、diff、CI、test、任务日志、shell output 解析 | 已完成 |
 | Phase 3.5 | 验证会话评测假设（纵向探针） | 一个维度的 scope drift 评估，验证确定性规则天花板和声明对账机制 | 已完成 |
-| Phase 4 | 评估单次 AI coding 过程 | `agentops eval`、上下文和边界诊断、`eval-history.jsonl` 数据累积 | 待规划 |
+| Phase 4 | 评估单次 AI coding 过程 | `agentops eval`、scope 维度对账评测、`eval-history.jsonl` 数据累积 | 已完成 |
 | Phase 5 | 沉淀仓库级经验 | 历史评测、失败模式、规则、skill 候选 | 待规划 |
 | Phase 6 | 生成改进资产 | `CLAUDE.md`、`AGENTS.md`、hook 和流程建议 | 待规划 |
 | Phase 7 | 加入实时监督 | Watcher、监督型 loop、趋势分析 | 待规划 |
@@ -67,8 +67,10 @@ docs/superpowers/plans/
 2. `2026-05-30-phase-1-minimal-repo-scan.md`：已完成。
 3. `2026-05-31-phase-2-workflow-runtime.md`：已完成。
 4. `2026-05-31-phase-3-analysis-tools.md`：已完成。
+5. `2026-06-03-phase-3.5-eval-spike.md`：已完成。
+6. `2026-06-03-phase-4-session-eval.md`：已完成。
 
-下一步：执行 Phase 4 会话评测实施计划（`docs/superpowers/plans/2026-06-03-phase-4-session-eval.md`）；确定性 eval 先行，LLM intent seam 留作随后一步。
+下一步：在现有 `IntentJudge` 接口后填充 LLM 判官（保持同一接口、测试中打桩），判断 scope 差值是否落在任务意图之内；随后基于累积的 `eval-history.jsonl` 规划 Phase 5 仓库记忆。
 
 Phase 3 完成后,进入 Phase 3.5 纵向探针:用现有的 `TaskReport` + `DiffSummary`,实现一个维度的会话评估（scope drift）,纯确定性规则,标出"这里该插 LLM"的位置。探针同时验证两个假设：确定性规则在会话质量上能走多远；"agent 声明 vs diff 真相"对账机制是否跑得通。探针完成后,基于答案规划 Phase 4 架构。
 

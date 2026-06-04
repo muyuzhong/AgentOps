@@ -64,7 +64,7 @@ LLM enriches diagnosis and recommendations.
 
 ```text
 agentops scan --repo <repo-path>
-agentops eval --repo <repo-path> --transcript <session.md> --diff <changes.diff>
+agentops eval --repo <repo-path> [--session <session.md>] [--diff-base <ref>] [--output <dir>]
 ```
 
 后续可以增加 SDK 和 Studio。
@@ -81,13 +81,16 @@ scan_repository -> evaluate_readiness -> write_readiness_artifacts
 
 当前编排层通过 `WorkflowRunner` 顺序执行同步步骤，并将生命周期事件写入 `WorkflowTrace`。required step 失败时立即停止后续步骤并保留失败 trace；optional step 失败时记录可恢复失败，继续执行后续步骤，并以 `completed_with_warnings` 结束。
 
-离线会话评测流程：
+离线会话评测流程（Phase 4 已实现）：
 
 ```text
-TaskReport (agent 声明) ──┐
-                          ├── Reconcile ── Evaluate ── Diagnose ── Recommend ── Artifact Write
-DiffSummary + ExitCode ──┘   (对账)
+parse_session → select_task → collect_diff → reconcile_scope → judge_intent → build_eval_result → write_eval_artifacts
+   (声明)         (最新任务)       (真相)         (确定性对账)     (意图裁决:LLM 接缝)    (评分/发现/建议)      (报告/评分/历史/trace)
 ```
+
+`run_eval` 通过同一个 `WorkflowRunner` 编排上述步骤：取最新一条任务报告作为声明，采集相对可配置 base（默认 `HEAD`）的 git diff 作为真相，用确定性的 `reconcile_scope` 找出文件集合层的差值，把差值转成 `EvalResult` 的确定性 scope-discipline 评分、带证据的 `Finding` 和可执行 `Recommendation`，再把"差值是否落在任务意图之内"交给可注入的 `IntentJudge`。
+
+LLM 只在 `judge_intent` 这一处介入，且 Phase 4 不填充：默认 `DeterministicIntentJudge` 对每个 `intent_alignment` 给出 `needs_review`（`source=deterministic`），整条默认路径无需 API key、无网络调用；真正的 LLM 判官后续按同一接口（`IntentJudge` 协议，测试中打桩）注入。每次评测向 `--output` 写出 `agentops-report.md`、`agentops-score.json`、`agentops-trace.json`，并向 append-only 的 `eval-history.jsonl` 追加一行带时间戳的记录，供 Phase 5 趋势分析使用。
 
 评测的核心不是"复述 agent 做了什么",而是"对账 agent 声称的和实际发生的"。agent 自述的 session md 是声明,git diff 和命令退出码是 agent 无法伪造的 ground truth,两者之间的差值才是诊断的核心信号。
 
@@ -109,13 +112,14 @@ DiffSummary + ExitCode ──┘   (对账)
 | --- | --- | --- |
 | `core/` | 定义稳定的领域模型和序列化契约 | 已建立基础模型 |
 | `scanners/` | 只读扫描仓库结构、约束文件、CI 和测试线索 | Phase 1 已实现；Phase 3 增加 CI 验证命令提取 |
-| `parsers/` | 解析 transcript、diff、shell output、测试结果 | Phase 3 已实现 diff、shell output、transcript 解析 |
-| `analyzers/` | 通过受控只读 Git 子进程采集 branch、status 和规范化 diff | Phase 3 已实现 GitAnalyzer |
+| `parsers/` | 解析 transcript、diff、shell output、测试结果 | Phase 3 已实现 diff、shell output、transcript 解析；Phase 4 解析可选 `### Changed Files` |
+| `analyzers/` | 通过受控只读 Git 子进程采集 branch、status 和规范化 diff | Phase 3 已实现 GitAnalyzer；Phase 4 支持可配置 diff base |
 | `initializers/` | 显式安装 session protocol、托管指令块和 session log 策略 | Phase 3 已实现 |
-| `evaluators/` | 使用确定性规则生成评分和 Finding | Phase 1 已实现 readiness 规则 |
+| `evaluators/` | 使用确定性规则生成评分和 Finding | Phase 1 readiness 规则；Phase 3.5 scope-drift 对账；Phase 4 确定性 session-eval 评分 |
+| `judges/` | 意图裁决可注入接口与确定性默认判官（唯一 LLM 接缝） | Phase 4 已实现确定性默认判官，LLM 判官待填充 |
 | `recommenders/` | 诊断 Finding 并输出优化指引,不直接生成最终文本 | 后续扩展 |
-| `writers/` | 输出 Markdown、JSON 和建议草案 | Phase 2 已实现 readiness 与 workflow trace 产物 |
-| `runtime/` | 串联各模块，维护 workflow 状态和事件 | Phase 2 已实现 scan workflow 编排、错误隔离和 trace |
+| `writers/` | 输出 Markdown、JSON 和建议草案 | Phase 2 readiness 与 workflow trace 产物；Phase 4 eval 报告/评分/历史产物 |
+| `runtime/` | 串联各模块，维护 workflow 状态和事件 | Phase 2 scan workflow 编排、错误隔离和 trace；Phase 4 session-eval workflow |
 
 ## 核心数据模型
 
@@ -134,12 +138,12 @@ DiffSummary + ExitCode ──┘   (对账)
 | `CIProfile` | 保存 CI 配置文件和保守提取的验证命令 |
 | `ShellResult` / `TestResult` | 保存有界 shell 输出摘要和受支持的测试结果 |
 | `SessionTrace` / `TaskReport` / `VerificationRecord` | 保存有界任务日志的规范化证据 |
+| `EvalResult` / `IntentVerdict` | 保存单次会话评测结果与意图裁决（intent_alignment 的 LLM 接缝载体） |
 
 后续按真实需求增加：
 
 | 模型 | 用途 |
 | --- | --- |
-| `EvalResult` | 保存单次工作过程的多维评测结果 |
 | `Intervention` | 保存实时监督循环给出的干预建议 |
 
 不要提前增加未被实际 workflow 使用的模型。

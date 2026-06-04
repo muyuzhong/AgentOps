@@ -30,11 +30,13 @@ AgentOps 的评估核心不是“复述 Agent 做了什么”，而是“对账 
 
 - **仓库就绪度扫描**：识别项目结构、测试命令、CI 配置（含验证命令）和 Agent 约束文件，输出 readiness 评分和可执行建议。
 - **仓库初始化**：安装会话协议，向 `CLAUDE.md` / `AGENTS.md` 写入托管指令块，约定 Agent 如何记录工作日志。
-- **工作流追踪**：记录确定性的扫描步骤和失败信息，便于检查执行过程。
+- **会话评测（scope 维度）**：对账最新一条任务报告的声明与 git 真相，输出确定性的 scope-discipline 评分、带证据的发现和可执行建议，并把每次评测追加进 `eval-history.jsonl`。意图判断的 LLM 接缝已就位，默认给出确定性的 `needs_review`。
+- **工作流追踪**：记录确定性的扫描和评测步骤及失败信息，便于检查执行过程。
 
 开发中：
 
-- **开发过程评测**：结合任务描述、有界任务日志、git diff、命令输出和测试结果，对账声明与真相，评估一次 AI coding 工作。
+- **更多评测维度**：在 scope/boundary 之外，增加上下文质量、验证充分性等维度。
+- **意图裁决接入 LLM**：在现有可注入接口后填充 LLM 判官，判断差值是否落在任务意图之内。
 - **问题诊断**：识别上下文缺失、修改越界、验证不足、重复失败和任务膨胀。
 - **仓库级改进建议**：给出 `CLAUDE.md`、`AGENTS.md`、skill、hook、验证命令和上下文管理建议。
 
@@ -78,16 +80,19 @@ agentops scan --repo <repo-path>
 agentops scan --repo <repo-path> --output <output-path>
 ```
 
-### 评测一次工作过程（开发中）
+### 评测一次会话
 
-离线过程评测和进一步的改进建议仍在开发中。后续版本将提供：
+`agentops eval` 评测最新一条任务报告：对账声明与 git 真相，输出确定性的 scope-discipline 评分、带证据的发现、可执行建议和意图裁决，并把本次评测追加进 `eval-history.jsonl`。它对目标仓库只读，只向 `--output` 目录写入产物。
 
 ```shell
-agentops eval \
-  --repo <repo-path> \
-  --transcript <session.md> \
-  --diff <changes.diff>
+# 评测最新任务报告（声明 vs 工作区相对 HEAD 的 diff）
+agentops eval --repo <repo-path>
+
+# --session 默认 <repo>/.agentops/agentops-session.md；--diff-base 默认 HEAD（任意 git ref 均可）
+agentops eval --repo <repo-path> --session <session.md> --diff-base <ref> --output <output-path>
 ```
+
+意图判断的 LLM 接缝已经就位但默认不调用模型：确定性默认判官把每个 `intent_alignment` 标为 `needs_review`，整条默认路径无需 API key、无网络调用。后续版本会在同一接口后填充 LLM 判官。
 
 ## 输出示例
 
@@ -126,13 +131,22 @@ Score: 60/100
 
 `agentops-trace.json` 记录扫描 workflow 的执行步骤和失败信息，便于定位问题。
 
+`agentops eval` 向 `--output` 目录写入一组评测产物：
+
+```text
+<output>/
+  agentops-report.md      # 评测报告：声明 vs 改动、发现、评分、建议、意图裁决
+  agentops-score.json     # 结构化 EvalResult
+  agentops-trace.json     # 评测 workflow trace
+  eval-history.jsonl      # 每次评测追加一行（带时间戳），用于趋势分析
+```
+
 后续版本还会逐步增加：
 
 ```text
   suggested-claude-md.md
   suggested-agents-md.md
   skill-candidates.md
-  eval-history.jsonl
 ```
 
 | 文件 | 用途 |
@@ -163,4 +177,4 @@ python -m pytest
 
 ## 开发状态
 
-项目仍在早期开发中，接口可能调整。当前已经打通仓库 readiness 扫描、仓库初始化和确定性 workflow 追踪；离线会话评测、问题诊断和改进资产生成正在按阶段推进。欢迎提交 Issue 讨论真实 AI coding 工作流中的使用场景和需求。
+项目仍在早期开发中，接口可能调整。当前已经打通仓库 readiness 扫描、仓库初始化、确定性 workflow 追踪，以及 scope 维度的会话评测（`agentops eval`，确定性评分 + 可注入的意图接缝 + `eval-history.jsonl` 数据累积）；意图裁决接入 LLM、更多评测维度、问题诊断和改进资产生成正在按阶段推进。欢迎提交 Issue 讨论真实 AI coding 工作流中的使用场景和需求。

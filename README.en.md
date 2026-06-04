@@ -30,11 +30,13 @@ Available today:
 
 - **Repository readiness scanning**: Identify project structure, test commands, CI configuration (including validation commands), and agent instruction files, then emit a readiness score with actionable suggestions.
 - **Repository initialization**: Install the session protocol and write a managed instruction block into `CLAUDE.md` / `AGENTS.md` so agents record their work in a known format.
-- **Workflow tracing**: Record deterministic scan steps and failures for inspection.
+- **Session evaluation (scope dimension)**: Reconcile the most recent task report's declaration against git truth, emit a deterministic scope-discipline score with evidence-backed findings and actionable recommendations, and append each eval to `eval-history.jsonl`. The intent-judgment LLM seam is in place and defaults to a deterministic `needs_review`.
+- **Workflow tracing**: Record deterministic scan and eval steps and failures for inspection.
 
 Under development:
 
-- **Session evaluation**: Reconcile declaration against ground truth across task descriptions, bounded session logs, git diffs, shell output, and test results.
+- **More evaluation dimensions**: Add context-quality and verification-sufficiency on top of scope/boundary.
+- **LLM-backed intent verdict**: Fill the existing injectable interface with an LLM judge that decides whether a gap falls within the task's intent.
 - **Actionable diagnosis**: Detect missing context, scope drift, insufficient verification, repeated failures, and task expansion.
 - **Repository-level improvements**: Suggest updates to `CLAUDE.md`, `AGENTS.md`, skills, hooks, verification commands, and context-management practices.
 
@@ -78,16 +80,19 @@ agentops scan --repo <repo-path>
 agentops scan --repo <repo-path> --output <output-path>
 ```
 
-### Evaluate a workflow (under development)
+### Evaluate a session
 
-Offline session evaluation and further improvement suggestions are under development. A future release will provide:
+`agentops eval` evaluates the most recent task report: it reconciles the declaration against git truth and emits a deterministic scope-discipline score, evidence-backed findings, actionable recommendations, and intent verdicts, then appends this eval to `eval-history.jsonl`. It is read-only with respect to the target repository and only writes artifacts under `--output`.
 
 ```shell
-agentops eval \
-  --repo <repo-path> \
-  --transcript <session.md> \
-  --diff <changes.diff>
+# Evaluate the most recent task report (declaration vs working tree relative to HEAD)
+agentops eval --repo <repo-path>
+
+# --session defaults to <repo>/.agentops/agentops-session.md; --diff-base defaults to HEAD (any git ref works)
+agentops eval --repo <repo-path> --session <session.md> --diff-base <ref> --output <output-path>
 ```
+
+The intent-judgment LLM seam is in place but the default path calls no model: a deterministic judge marks every `intent_alignment` as `needs_review`, with no API key or network. A later release fills the same interface with an LLM judge.
 
 ## Output
 
@@ -126,13 +131,22 @@ Score: 60/100
 
 `agentops-trace.json` records workflow steps and failures so you can inspect how a scan completed.
 
+`agentops eval` writes a set of evaluation artifacts under `--output`:
+
+```text
+<output>/
+  agentops-report.md      # eval report: declared vs changed, findings, score, recommendations, intent verdicts
+  agentops-score.json     # structured EvalResult
+  agentops-trace.json     # eval workflow trace
+  eval-history.jsonl      # one appended line per eval (timestamped) for trend analysis
+```
+
 Future releases will add:
 
 ```text
   suggested-claude-md.md
   suggested-agents-md.md
   skill-candidates.md
-  eval-history.jsonl
 ```
 
 | File | Purpose |
@@ -163,4 +177,4 @@ The project advances deterministic-rules-first, writing a failing test before th
 
 ## Development Status
 
-AgentOps Harness is an early-stage open-source project, and interfaces may change. Repository readiness scanning, repository initialization, and deterministic workflow tracing work today; offline session evaluation, diagnosis, and improvement-asset generation are landing phase by phase. Issues and discussions about real AI coding workflows are welcome.
+AgentOps Harness is an early-stage open-source project, and interfaces may change. Repository readiness scanning, repository initialization, deterministic workflow tracing, and scope-dimension session evaluation (`agentops eval`, deterministic scoring plus an injectable intent seam and an accumulating `eval-history.jsonl`) work today; the LLM-backed intent verdict, more evaluation dimensions, diagnosis, and improvement-asset generation are landing phase by phase. Issues and discussions about real AI coding workflows are welcome.

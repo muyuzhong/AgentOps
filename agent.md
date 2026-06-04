@@ -154,7 +154,7 @@ agentops scan --repo <repo-path>
 第二个目标命令：
 
 ```bash
-agentops eval --repo <repo-path> --transcript session.md --diff changes.diff
+agentops eval --repo <repo-path> [--session <session.md>] [--diff-base <ref>]
 ```
 
 ## 建议目录结构
@@ -222,15 +222,17 @@ agentops_harness/
 
 ## 当前下一步
 
-Phase 3 analysis tools 已完成：仓库初始化、公共 evidence/session 模型、unified diff parser、只读 GitAnalyzer、CIDetector、ShellOutputParser、TranscriptParser 全部落地。Phase 3.5 纵向探针（stop-hook + scope-drift 对账）也已完成，`python -m pytest` 共 187 passed。
+Phase 4 会话评测已完成：`agentops eval` 通过 `WorkflowRunner` 串联 TranscriptParser、GitAnalyzer、`reconcile_scope`、可注入的 `IntentJudge` 和 `evaluate_scope`，对账最新一条任务报告的声明与 git 真相，写出 `agentops-report.md`、`agentops-score.json`、`agentops-trace.json`，并向 append-only 的 `eval-history.jsonl` 追加一行带时间戳的记录。任务日志协议支持显式 `### Changed Files`，diff base 可配置（默认 `HEAD`）。`python -m pytest` 共 231 passed。
 
-Phase 3.5 探针结论见 `docs/superpowers/findings/2026-06-03-scope-drift-spike.md`：确定性规则可靠覆盖文件集合层的 scope drift，意图判断需 LLM。下一步进入 Phase 4 会话评测——把确定性对账作为第一道、LLM 只在 intent_alignment 介入，并升级任务日志协议（增加显式 `### Changed Files`）。实施计划见 `docs/superpowers/plans/2026-06-03-phase-4-session-eval.md`。
+Phase 3.5 探针结论见 `docs/superpowers/findings/2026-06-03-scope-drift-spike.md`：确定性规则可靠覆盖文件集合层的 scope drift，意图判断需 LLM。Phase 4 据此把确定性对账作为第一道，LLM 只在 `intent_alignment` 处介入，默认 `DeterministicIntentJudge` 给出 `needs_review` 且不触达任何模型。
+
+下一步：在现有 `IntentJudge` 接口后填充 LLM 判官（保持同一接口、测试中打桩、默认路径仍无网络/API key），判断 scope 差值是否落在任务意图之内；随后基于累积的 `eval-history.jsonl` 规划 Phase 5 仓库记忆。
 
 实施时依次执行：
 
 1. 阅读 `docs/project-memory.md`。
 2. 阅读 `docs/development-roadmap.md`，确认下一阶段边界。
-3. 执行 `docs/superpowers/plans/2026-06-03-phase-4-session-eval.md`。
+3. 先为 LLM intent judge 写一份新的纵向切片实施计划，再开始编码。
 
 每次只完成计划中的一个 Task，先写失败测试，再写最小实现，然后运行测试并提交。不要一次实现后续 Phase 的能力。
 
