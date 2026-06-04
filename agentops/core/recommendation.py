@@ -14,6 +14,9 @@ class RecommendationKind(str, Enum):
     ADD_TESTS = "add_tests"
     ADD_CI = "add_ci"
     REVIEW_TEST_COMMANDS = "review_test_commands"
+    DECLARE_CHANGED_FILES = "declare_changed_files"
+    REVIEW_DECLARED_CHANGES = "review_declared_changes"
+    REVIEW_SCOPE_BOUNDARY = "review_scope_boundary"
 
 
 @dataclass(frozen=True)
