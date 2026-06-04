@@ -13,6 +13,7 @@ class ArtifactKind(str, Enum):
     MARKDOWN_REPORT = "markdown_report"
     JSON_SCORE = "json_score"
     WORKFLOW_TRACE = "workflow_trace"
+    EVAL_HISTORY = "eval_history"
 
 
 @dataclass(frozen=True)

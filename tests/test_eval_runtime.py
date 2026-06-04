@@ -144,10 +144,17 @@ def test_run_eval_orchestrates_session_eval_workflow(tmp_path: Path) -> None:
         "reconcile_scope",
         "judge_intent",
         "build_eval_result",
+        "write_eval_artifacts",
     ]
-    assert any(
-        artifact.kind is ArtifactKind.WORKFLOW_TRACE for artifact in run.artifacts
-    )
+    assert {artifact.kind for artifact in run.artifacts} == {
+        ArtifactKind.MARKDOWN_REPORT,
+        ArtifactKind.JSON_SCORE,
+        ArtifactKind.EVAL_HISTORY,
+        ArtifactKind.WORKFLOW_TRACE,
+    }
+    assert (output_dir / "agentops-report.md").exists()
+    assert (output_dir / "agentops-score.json").exists()
+    assert (output_dir / "eval-history.jsonl").exists()
     trace_path = output_dir / "agentops-trace.json"
     assert json.loads(trace_path.read_text(encoding="utf-8"))["status"] == "completed"
 
