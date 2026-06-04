@@ -16,6 +16,8 @@ from agentops.core.eval import (
 from agentops.core.session import TaskReport
 from agentops.core.workflow import WorkflowEventType, WorkflowStatus
 from agentops.evaluators.scope_drift import ScopeDriftReport
+from agentops.judges.llm_intent import LLMIntentJudge
+from agentops.llm.client import LLMError, LLMRequest, LLMResponse
 from agentops.runtime.eval import EvalWorkflowError, run_eval
 from agentops.writers.trace import TraceWriter
 
@@ -108,6 +110,22 @@ class _StubJudge:
     ) -> tuple[IntentVerdict, ...]:
         self.calls.append((task_report, report))
         return self._verdicts
+
+
+class _StubLLMClient:
+    """记录请求并回放预置文本（或抛错）的 LLMClient 替身；绝不触网。"""
+
+    def __init__(self, *, text: str | None = None, error: Exception | None = None) -> None:
+        self._text = text
+        self._error = error
+        self.requests: list[LLMRequest] = []
+
+    def complete(self, request: LLMRequest) -> LLMResponse:
+        self.requests.append(request)
+        if self._error is not None:
+            raise self._error
+        assert self._text is not None
+        return LLMResponse(text=self._text)
 
 
 def test_run_eval_orchestrates_session_eval_workflow(tmp_path: Path) -> None:
@@ -286,3 +304,77 @@ def test_run_eval_keeps_original_failure_when_trace_cannot_be_written(
             _write_session(repo_path, _task("Fix login", "src/auth.py")),
             tmp_path / "output",
         )
+
+
+def test_run_eval_flows_llm_intent_verdicts_into_result(tmp_path: Path) -> None:
+    repo_path = _create_git_repo(tmp_path)
+    _stage_undeclared_change(repo_path)
+    session_path = _write_session(repo_path, _task("Fix login", "src/auth.py"))
+    client = _StubLLMClient(
+        text=json.dumps(
+            [
+                {
+                    "finding_code": "undeclared_change",
+                    "evidence": ["src/billing.py"],
+                    "verdict": VERDICT_DRIFT,
+                    "rationale": "billing is unrelated to the login task",
+                }
+            ]
+        )
+    )
+
+    run = run_eval(
+        repo_path, session_path, tmp_path / "output", intent_judge=LLMIntentJudge(client)
+    )
+
+    # 确定性分数不受意图裁决影响（仍是未声明改动扣 15）。
+    assert run.result.score == 85
+    assert client.requests, "the LLM judge should consult the injected client"
+    assert len(run.result.intent_verdicts) == 1
+    verdict = run.result.intent_verdicts[0]
+    assert verdict.source == SOURCE_LLM
+    assert verdict.verdict == VERDICT_DRIFT
+    assert verdict.finding_code == "undeclared_change"
+    assert verdict.evidence == ("src/billing.py",)
+    # 工作流步骤形状不变。
+    assert [
+        event.step_name
+        for event in run.trace.events
+        if event.event_type is WorkflowEventType.STEP_COMPLETED
+    ] == [
+        "parse_session",
+        "select_task",
+        "collect_diff",
+        "reconcile_scope",
+        "judge_intent",
+        "build_eval_result",
+        "write_eval_artifacts",
+    ]
+
+
+def test_run_eval_degrading_llm_judge_matches_default_path(tmp_path: Path) -> None:
+    repo_path = _create_git_repo(tmp_path)
+    _stage_undeclared_change(repo_path)
+    session_path = _write_session(repo_path, _task("Fix login", "src/auth.py"))
+
+    # 默认（确定性）路径作为基准。
+    default_run = run_eval(repo_path, session_path, tmp_path / "default")
+
+    # 注入一个必然失败的 LLM 客户端：判官应降级到确定性，且结果与默认路径一致。
+    degraded = run_eval(
+        repo_path,
+        session_path,
+        tmp_path / "degraded",
+        intent_judge=LLMIntentJudge(_StubLLMClient(error=LLMError("network down"))),
+    )
+
+    assert degraded.trace.status is WorkflowStatus.COMPLETED
+    # 裁决不移动分数：降级运行与默认运行同分。
+    assert degraded.result.score == default_run.result.score == 85
+    # 降级裁决与默认确定性裁决逐字一致。
+    assert degraded.result.intent_verdicts == default_run.result.intent_verdicts
+    assert degraded.result.intent_verdicts
+    assert all(
+        verdict.source == SOURCE_DETERMINISTIC
+        for verdict in degraded.result.intent_verdicts
+    )
