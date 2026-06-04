@@ -25,7 +25,7 @@
 ## 当前状态
 
 - 当前分支：`main`
-- 当前阶段：Phase 3.5 纵向探针已完成（最小 stop-hook + scope-drift 对账探针），结论见 `docs/superpowers/findings/2026-06-03-scope-drift-spike.md`。Phase 3 analysis tools（Task 1–11）此前已完成。Phase 4 会话评测实施计划已写好，下一步按计划执行（确定性 eval 先行，LLM intent seam 随后）。
+- 当前阶段：Phase 4 会话评测正在执行，Task 1 changed-files declaration、Task 2 configurable diff base 和 Task 3 deterministic session-eval scoring / intent seam 已完成。下一步执行 Task 4：通过 `WorkflowRunner` 接入 eval pipeline。
 - 当前版本：`0.1.0`
 - 当前可用命令：
   - `agentops --help`
@@ -41,7 +41,7 @@
 python -m pytest -v
 ```
 
-- 最近一次确认的测试结果：2026-06-03 执行 `python -m pytest -v`，共 `187 passed`。
+- 最近一次确认的测试结果：2026-06-04 执行 `python -m pytest -v`，共 `213 passed`，另有 1 个既有 `PytestCollectionWarning`（`TestResult` dataclass 名称被 pytest 尝试收集）。
 
 ## 已完成能力
 
@@ -178,6 +178,26 @@ python -m pytest -v
 - `reconcile_scope` 用纯确定性规则对账 `TaskReport`（声明）与 `DiffSummary`（真相）：undeclared_change、declared_not_changed、cross_module_breadth；并以单条 `intent_alignment`（`llm_needed=True`）标出意图判断必须交给 LLM 的位置，不调用任何 LLM。
 - 已在真实 git working tree 上跑通整条链路（TranscriptParser → GitAnalyzer → reconcile_scope），结论写入 `docs/superpowers/findings/2026-06-03-scope-drift-spike.md`。Task 3（init 自动注册 stop-hook）按计划推迟，改为在 findings 文档记录手动接线方式。
 
+### Phase 4：Session Eval
+
+- 已完成 Task 1 changed-files declaration：
+  - `TaskReport.changed_files`
+  - `TranscriptParser` 解析可选 `### Changed Files`
+  - `reconcile_scope` 优先使用显式 changed files，缺失时回退到 changes 自由文本路径抽取。
+- 已完成 Task 2 configurable diff base：
+  - `GitAnalyzer.diff(repo_path, base="HEAD")`
+- diff base 默认仍是 `HEAD`；显式 base 作为受控 git 参数传入，拒绝空值、空白、option-like 和包含控制字符的 ref。
+- 已完成 Task 3 deterministic session-eval scoring and intent seam：
+  - `EvalResult`
+  - `IntentVerdict`
+  - `ScopeEvaluation`
+  - `evaluate_scope`
+  - `IntentJudge`
+  - `DeterministicIntentJudge`
+- `evaluate_scope` 只对确定性 scope findings 扣分，跳过 `llm_needed=True` 的 `intent_alignment`；每个扣分 finding 都带 evidence 和可执行 `Recommendation`，score 下限为 `0`。
+- `DeterministicIntentJudge` 是 Phase 4 默认意图判官：只对 `llm_needed=True` 且 `code == "intent_alignment"` 的 finding 产出 `needs_review` / `source="deterministic"` 裁决，不调用 LLM、网络或 API key。
+- 尚未实现 Task 4 eval workflow runtime、Task 5 eval artifacts/history、Task 6 `agentops eval` CLI 和 Task 7 Phase 4 文档收口。
+
 ## 当前文件边界
 
 | 路径 | 职责 |
@@ -185,6 +205,7 @@ python -m pytest -v
 | `agentops/cli.py` | CLI 入口和 `scan` 子命令薄适配器 |
 | `agentops/core/repo.py` | 仓库画像模型 |
 | `agentops/core/evaluation.py` | Finding 和 ReadinessReport |
+| `agentops/core/eval.py` | 会话评测结果模型和 intent verdict 模型 |
 | `agentops/core/recommendation.py` | 建议类型和建议模型 |
 | `agentops/core/artifact.py` | 输出产物模型 |
 | `agentops/core/evidence.py` | diff、git、CI、shell 和 test 公共证据模型 |
@@ -199,6 +220,8 @@ python -m pytest -v
 | `agentops/scanners/ci.py` | 只读 CI 配置检测与保守验证命令提取 |
 | `agentops/evaluators/readiness.py` | 确定性 readiness 扣分规则 |
 | `agentops/evaluators/scope_drift.py` | Phase 3.5 scope-drift 对账探针（声明 vs 真相） |
+| `agentops/evaluators/session_eval.py` | 将 scope-drift 对账结果转换为确定性 score、findings 和 recommendations |
+| `agentops/judges/intent.py` | intent judge 协议和确定性默认判官 |
 | `agentops/hooks/session_log.py` | 会话日志新鲜度检查（stop-hook 核心） |
 | `agentops/writers/report.py` | Markdown 和 JSON readiness 产物写出 |
 | `agentops/writers/trace.py` | JSON workflow trace 产物写出 |
@@ -216,6 +239,9 @@ python -m pytest -v
 | `tests/test_transcript_parser.py` | Phase 3 TranscriptParser 测试 |
 | `tests/test_session_log_hook.py` | Phase 3.5 会话日志 stop-hook 测试 |
 | `tests/test_scope_drift.py` | Phase 3.5 scope-drift 对账测试 |
+| `tests/test_eval_models.py` | Phase 4 eval result 和 intent verdict 模型测试 |
+| `tests/test_session_eval.py` | Phase 4 deterministic scope scoring 测试 |
+| `tests/test_intent_judge.py` | Phase 4 intent judge seam 测试 |
 | `tests/test_repo_scanner.py` | 仓库扫描器测试 |
 | `tests/test_readiness_evaluator.py` | readiness 评分规则测试 |
 | `tests/test_report_writer.py` | readiness 产物写出测试 |
@@ -223,9 +249,13 @@ python -m pytest -v
 
 ## 下一步
 
-Phase 3.5 纵向探针已完成（stop-hook + scope-drift 对账），结论见 `docs/superpowers/findings/2026-06-03-scope-drift-spike.md`。
+Phase 4 Task 3 已完成。下一步继续执行 Phase 4 会话评测实施计划中的 Task 4：
 
-下一步：基于探针结论规划 Phase 4 会话评测。探针关键结论：确定性规则可靠覆盖"文件集合"层（undeclared_change / declared_not_changed / cross_module_breadth），LLM 只需在 intent_alignment（判断差值是否属于任务意图）处引入；Phase 4 应升级任务日志协议增加显式 `### Changed Files`，并支持可配置 diff base。Phase 4 实施计划见 `docs/superpowers/plans/2026-06-03-phase-4-session-eval.md`，下一步按计划执行。
+```text
+docs/superpowers/plans/2026-06-03-phase-4-session-eval.md
+```
+
+Task 4 将新增 `run_eval(repo, session, output, diff_base, intent_judge)`，通过现有 `WorkflowRunner` 串联 TranscriptParser、GitAnalyzer、reconcile_scope、IntentJudge 和 evaluate_scope，并记录 eval workflow trace。保持当前边界：不写 artifacts/history，不暴露 CLI，不引入 LLM 或网络调用。
 
 ## 关键决策
 
@@ -263,6 +293,9 @@ Phase 3.5 纵向探针已完成（stop-hook + scope-drift 对账），结论见 
 
 | 日期 | 提交 | 内容 |
 | --- | --- | --- |
+| 2026-06-04 | `1b954a3` | 实现确定性 session-eval scoring、EvalResult 和 intent judge seam |
+| 2026-06-03 | `4ae27b8` | 支持可配置 git diff base |
+| 2026-06-03 | `80b236f` | 在任务日志协议中显式声明 changed files |
 | 2026-06-03 | `f82a196` | scope-drift 对账探针（确定性，标注 LLM 介入点） |
 | 2026-06-03 | `9869ea0` | 暴露 agentops check-session-log 新鲜度命令 |
 | 2026-06-03 | `cc96a49` | 检测会话日志是否有新追加（stop-hook 核心） |
