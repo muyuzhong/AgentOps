@@ -14,6 +14,9 @@ class ArtifactKind(str, Enum):
     JSON_SCORE = "json_score"
     WORKFLOW_TRACE = "workflow_trace"
     EVAL_HISTORY = "eval_history"
+    MEMORY_REPORT = "memory_report"
+    MEMORY_JSON = "memory_json"
+    SKILL_CANDIDATES = "skill_candidates"
 
 
 @dataclass(frozen=True)
