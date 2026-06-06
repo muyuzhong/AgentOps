@@ -663,3 +663,143 @@ def test_eval_command_rejects_unknown_intent_judge(tmp_path: Path) -> None:
 
     assert exc_info.value.code == 2
 
+
+_MEMORY_HISTORY_LINE = json.dumps(
+    {
+        "timestamp": "2026-06-06T00:00:00+00:00",
+        "result": {
+            "score": 80,
+            "findings": [
+                {
+                    "code": "undeclared_change",
+                    "severity": "warning",
+                    "message": "m",
+                    "evidence": ["src/a.py"],
+                }
+            ],
+            "intent_verdicts": [],
+        },
+        "verdict_summary": {},
+    },
+    sort_keys=True,
+)
+
+
+def _write_history_file(path: Path, *lines: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_memory_command_writes_artifacts_and_prints_summary(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo_path = tmp_path / "repo"
+    # 默认历史路径：<repo>/.agentops/eval-history.jsonl。
+    _write_history_file(
+        repo_path / ".agentops" / "eval-history.jsonl",
+        _MEMORY_HISTORY_LINE,
+        _MEMORY_HISTORY_LINE,
+    )
+    output_dir = tmp_path / "out"
+
+    exit_code = main(["memory", "--repo", str(repo_path), "--output", str(output_dir)])
+
+    assert exit_code == 0
+    assert (output_dir / "agentops-memory.md").exists()
+    assert (output_dir / "agentops-memory.json").exists()
+    assert (output_dir / "skill-candidates.md").exists()
+    assert (output_dir / "agentops-trace.json").exists()
+    output = capsys.readouterr().out
+    assert "AgentOps repository memory:" in output
+    assert "Wrote" in output
+
+
+def test_memory_command_honors_custom_history_and_output(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    history = tmp_path / "custom-history.jsonl"
+    _write_history_file(history, _MEMORY_HISTORY_LINE)
+    output_dir = tmp_path / "custom-out"
+
+    exit_code = main(
+        [
+            "memory",
+            "--repo",
+            str(tmp_path / "repo"),
+            "--history",
+            str(history),
+            "--output",
+            str(output_dir),
+        ]
+    )
+
+    assert exit_code == 0
+    assert (output_dir / "agentops-memory.json").exists()
+
+
+def test_memory_command_defaults_history_to_repo_agentops(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    def capture_run_memory(
+        repo_path: Path,
+        history_path: Path,
+        output_dir: Path,
+        **kwargs: object,
+    ) -> object:
+        captured.update(repo=repo_path, history=history_path, output=output_dir)
+        return SimpleNamespace(
+            memory=SimpleNamespace(
+                sample_count=1,
+                trend=SimpleNamespace(direction="unknown"),
+                failure_modes=(),
+                rule_candidates=(),
+                skill_candidates=(),
+            ),
+            artifacts=(),
+        )
+
+    monkeypatch.setattr(cli_module, "run_memory", capture_run_memory)
+
+    exit_code = main(
+        ["memory", "--repo", str(tmp_path / "repo"), "--output", str(tmp_path / "out")]
+    )
+
+    assert exit_code == 0
+    # 未显式提供 --history 时回退到 <repo>/.agentops/eval-history.jsonl。
+    assert (
+        captured["history"]
+        == tmp_path / "repo" / ".agentops" / "eval-history.jsonl"
+    )
+
+
+def test_memory_command_reports_structured_failure_for_missing_history(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output_dir = tmp_path / "out"
+
+    # 历史缺失时给出结构化错误而非 traceback，并指引先跑 eval。
+    exit_code = main(
+        ["memory", "--repo", str(tmp_path / "missing"), "--output", str(output_dir)]
+    )
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "run agentops eval first" in captured.err
+    assert "Traceback" not in captured.err
+    assert (output_dir / "agentops-trace.json").exists()
+
+
+def test_memory_command_does_not_hide_unexpected_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail_unexpectedly(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("unexpected failure")
+
+    monkeypatch.setattr(cli_module, "run_memory", fail_unexpectedly)
+
+    with pytest.raises(RuntimeError, match="unexpected failure"):
+        main(["memory", "--repo", str(tmp_path), "--output", str(tmp_path / "out")])
+

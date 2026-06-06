@@ -14,6 +14,7 @@ from agentops.initializers import SessionLogPolicy, run_init
 from agentops.judges import IntentJudge, LLMIntentJudge
 from agentops.llm import LLMClient, LLMError, OpenAICompatibleClient
 from agentops.runtime.eval import EvalWorkflowError, run_eval
+from agentops.runtime.memory import MemoryWorkflowError, run_memory
 from agentops.runtime.scan import ScanWorkflowError, run_scan
 
 # --intent-judge llm 默认指向的 OpenAI 兼容端点（mimo）；可用 --intent-base-url /
@@ -107,6 +108,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="OpenAI-compatible base URL for --intent-judge llm "
         "(default: $AGENTOPS_LLM_BASE_URL or the bundled mimo endpoint).",
     )
+    memory_parser = subparsers.add_parser(
+        "memory",
+        help="Distill accumulated eval history into repository memory.",
+    )
+    memory_parser.add_argument("--repo", required=True, type=Path)
+    memory_parser.add_argument("--history", type=Path, default=None)
+    memory_parser.add_argument("--output", type=Path, default=Path(".agentops"))
     return parser
 
 
@@ -208,6 +216,39 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Wrote {error.trace_artifact.path}", file=sys.stderr)
             return 1
         print(f"AgentOps scope-discipline score: {run.result.score}/100")
+        for artifact in run.artifacts:
+            print(f"Wrote {artifact.path}")
+        return 0
+
+    if args.command == "memory":
+        # 未显式提供 --history 时回退到仓库内默认的累积历史。
+        history_path = (
+            args.history
+            if args.history is not None
+            else args.repo / ".agentops" / "eval-history.jsonl"
+        )
+        try:
+            run = run_memory(args.repo, history_path, args.output)
+        except MemoryWorkflowError as error:
+            # 缺失/空历史等结构化失败：打印保留下来的失败原因（含"先跑 agentops eval"
+            # 的指引），不暴露 traceback；意外异常不被隐藏。
+            message = (
+                error.trace.failures[0].message
+                if error.trace.failures
+                else "unknown error"
+            )
+            print(f"AgentOps memory failed: {message}", file=sys.stderr)
+            if error.trace_artifact is not None:
+                print(f"Wrote {error.trace_artifact.path}", file=sys.stderr)
+            return 1
+        memory = run.memory
+        print(
+            f"AgentOps repository memory: {memory.sample_count} eval(s), "
+            f"trend {memory.trend.direction}; "
+            f"{len(memory.failure_modes)} failure mode(s), "
+            f"{len(memory.rule_candidates)} rule candidate(s), "
+            f"{len(memory.skill_candidates)} skill candidate(s)"
+        )
         for artifact in run.artifacts:
             print(f"Wrote {artifact.path}")
         return 0
