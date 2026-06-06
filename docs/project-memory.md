@@ -25,7 +25,7 @@
 ## 当前状态
 
 - 当前分支：`main`
-- 当前阶段：Phase 4 会话评测已完成（Task 1–7）。`agentops eval` 已打通确定性 scope 对账评测、eval 产物与 `eval-history.jsonl` 数据累积，意图判断的 LLM 接缝可注入但默认确定性。下一步：在同一 `IntentJudge` 接口后填充 LLM 判官，随后规划 Phase 5 仓库记忆。
+- 当前阶段：Phase 5 仓库记忆已完成（Task 1–8）。新增只读命令 `agentops memory`，把累积的 `eval-history.jsonl` 确定性地投影为仓库记忆——分数/漂移**趋势**、反复出现的**失败模式**（各带 N/M 复现 + 热点路径 + 最近出现）、带证据的**规则候选**（复用现有 `Recommendation`）、可复用的 **skill 候选**——并覆盖写出 `agentops-memory.md`、`agentops-memory.json`、`skill-candidates.md` 与 `agentops-trace.json`。记忆是历史的可再生投影（同样历史产出字节一致的记忆、每次覆盖重写），离线、确定性、不调用 LLM、不移动任何评测分数、零新增运行时依赖。`MemoryNarrator` 接缝已就位但只有确定性身份实现（LLM 叙述者留到可选 Phase 5.5）。下一步：Phase 6 改进资产。
 - 当前版本：`0.1.0`
 - 当前可用命令：
   - `agentops --help`
@@ -37,13 +37,16 @@
   - `agentops check-session-log --repo <repo-path>`
   - `agentops eval --repo <repo-path>`
   - `agentops eval --repo <repo-path> --session <session.md> --diff-base <ref> --output <output-path>`
+  - `agentops eval --repo <repo-path> --intent-judge llm --intent-model <id> [--intent-base-url <url>]`
+  - `agentops memory --repo <repo-path>`
+  - `agentops memory --repo <repo-path> --history <eval-history.jsonl> --output <output-path>`
 - 当前完整测试命令：
 
 ```powershell
 python -m pytest -v
 ```
 
-- 最近一次确认的测试结果：2026-06-04 执行 `python -m pytest -v`，共 `231 passed`，另有 1 个既有 `PytestCollectionWarning`（`TestResult` dataclass 名称被 pytest 尝试收集）。
+- 最近一次确认的测试结果：2026-06-06 执行 `python -m pytest -v`，共 `337 passed`，另有 1 个既有 `PytestCollectionWarning`（`TestResult` dataclass 名称被 pytest 尝试收集）。
 
 ## 已完成能力
 
@@ -212,14 +215,61 @@ python -m pytest -v
 - `--session` 默认 `<repo>/.agentops/agentops-session.md`，`--diff-base` 默认 `HEAD`；结构化 `EvalWorkflowError`（缺失仓库/会话、空日志）返回退出码 1、stderr 简短信息且无 traceback，意外异常不被隐藏；`scan`/`init`/`check-session-log` 行为保持不变。
 - 已完成 Task 7 Phase 4 文档收口与真实验证：对本仓库执行 `agentops eval --repo . --diff-base 42ac100`，声明与 git 真相一致得 `100/100`，写出四个产物，且评测前后 tracked 工作区保持干净（对目标仓库只读）。
 
+### Phase 4.5：LLM Intent Judge
+
+- 在已就位的 `IntentJudge` 接缝后填充了 provider 无关的 LLM 接缝：
+  - `agentops/llm/client.py`：文本进、文本出的 `LLMClient` 协议 + `LLMRequest` / `LLMResponse` / `LLMError`。
+  - `agentops/llm/openai_compatible.py`：唯一适配器 `OpenAICompatibleClient`，仅用标准库 `urllib` 调 OpenAI 兼容 `/chat/completions`；零新增依赖。
+  - `agentops/judges/llm_intent.py`：`LLMIntentJudge`——选发现 → 拼提示 → 调用 → 严格解析/校验 → 映射为 `IntentVerdict(source="llm")`；任何失败降级回 `DeterministicIntentJudge`。
+- `agentops eval --intent-judge llm --intent-model <id>` 对每条 `undeclared_change` / `cross_module_breadth` 逐条裁决 `within_intent` / `drift`；缺 key/缺 model/网络错误/响应不可解析一律降级为确定性 `needs_review`，评测仍以退出码 0 完成并在 stderr 打印一行降级说明。
+- 裁决**不移动分数**：`build_eval_result` 仍只用确定性 `evaluate_scope` 计分；`intent_verdicts` 只是并列富化。报告按 `drift` / `within_intent` / `needs_review` 分组并标注来源；`eval-history.jsonl` 行追加 `verdict_summary` 计数摘要，供 Phase 5 读取 drift 趋势。
+
+### Phase 5：Repository Memory
+
+- 已完成 Task 1 记忆核心模型：
+  - `ScoreTrend`
+  - `FailureMode`
+  - `SkillCandidate`
+  - `RepoMemory`
+  - `ArtifactKind` 增加 `MEMORY_REPORT` / `MEMORY_JSON` / `SKILL_CANDIDATES`。
+- 均为不可变 dataclass，提供稳定 JSON 友好 `to_dict()`（tuple 转 list、None 保留、嵌套模型递归序列化）；`RepoMemory.rule_candidates` 复用现有 `Recommendation`，不新增模型。
+- 已完成 Task 2 累积 eval 历史读取器：
+  - `HistoryRecord`
+  - `EvalHistoryReader`
+- 逐行读 append-only 的 `eval-history.jsonl`：跳过空行、无法 `json.loads` 或缺 `result` 的坏行；4.5 前缺 `verdict_summary` 的旧行回退为空摘要 `{}`；只保留最新 `MAX_HISTORY_RECORDS` 条并维持源顺序；不导入 git、不触网；缺失文件交由 runtime 处理。
+- 已完成 Task 3 确定性趋势 + 失败模式挖掘：
+  - `compute_score_trend`
+  - `mine_failure_modes`
+- 趋势按"最早 vs 最近"固定规则给 `improving`/`worsening`/`flat`，<2 样本为 `unknown`；平均分固定两位小数；`drift_verdict_total` 累加 `verdict_summary` 的 drift 计数。失败模式按三个稳定 scope code 聚类，并从 drift 裁决派生 `confirmed_drift`；按出现次数降序、code 升序排列；热点路径按频次降序、路径升序且有界（top 10）。
+- 已完成 Task 4 规则与 skill 候选：
+  - `derive_rule_candidates`
+  - `derive_skill_candidates`
+- 复现阈值（provisional）≥2 次评测：达标的失败模式各产出一条复用既有 kind 映射、rationale 带 N/M + 热点路径证据的 `Recommendation`；并提炼出确定性 slug 的 `SkillCandidate`（scope-boundary 两类按主导模块细化 slug 并去重），各带 N/M + 路径证据；未达阈值不产出。
+- 已完成 Task 5 投影装配与叙述接缝：
+  - `build_repo_memory`
+  - `MemoryNarrator`（`runtime_checkable` Protocol）
+  - `DeterministicMemoryNarrator`（身份实现）
+- `build_repo_memory` 顺序调用各确定性投影函数组成 `RepoMemory`，再交给可注入的叙述者；默认确定性身份实现，同样 records 产出字节一致的记忆；叙述者只能改写描述字段，绝不改动结构事实（与 LLM 意图判官同构）。
+- 已完成 Task 6 记忆产物写出：
+  - `MemoryReportWriter`
+- 覆盖写出（绝不 append）`agentops-memory.md`（趋势 / 失败模式含 N/M + 热点路径 + 最近出现 / 规则候选 / skill 候选）、`agentops-memory.json`（镜像 `RepoMemory.to_dict()`，UTF-8、sort_keys、两空格缩进、尾随换行）、`skill-candidates.md`（聚焦清单）；空但合法的记忆也渲染干净。
+- 已完成 Task 7 记忆 workflow runtime 与 CLI：
+  - `MemoryRunResult`
+  - `MemoryWorkflowError`
+  - `run_memory`
+  - `agentops memory --repo <p> [--history <jsonl>] [--output <dir>]`
+- `run_memory` 通过同一个 `WorkflowRunner` 串联 read_history → build_memory → write_memory_artifacts，复用与 scan/eval 相同的 trace 事件/失败语义；缺失文件或零条可用记录降级为结构化 `MemoryWorkflowError`（保留 trace，附"先跑 agentops eval"指引）；默认确定性叙述者，不触网/不需 key。CLI 是 `run_memory` 的薄适配器：打印一行摘要 + 产物路径；结构化失败返回退出码 1、stderr 简短信息且无 traceback；`scan`/`init`/`check-session-log`/`eval` 行为保持不变。
+- 已完成 Task 8 文档收口与真实验证：对本仓库的真实 `eval-history.jsonl` 执行 `agentops memory`，写出三个记忆产物 + trace、退出 0，二次运行字节一致（覆盖非 append），且对目标仓库只读（仅向 `--output` 写，`.agentops` 已被忽略）。
+
 ## 当前文件边界
 
 | 路径 | 职责 |
 | --- | --- |
-| `agentops/cli.py` | CLI 入口和 `scan` / `init` / `check-session-log` / `eval` 子命令薄适配器 |
+| `agentops/cli.py` | CLI 入口和 `scan` / `init` / `check-session-log` / `eval` / `memory` 子命令薄适配器 |
 | `agentops/core/repo.py` | 仓库画像模型 |
 | `agentops/core/evaluation.py` | Finding 和 ReadinessReport |
 | `agentops/core/eval.py` | 会话评测结果模型和 intent verdict 模型 |
+| `agentops/core/memory.py` | 仓库记忆模型：ScoreTrend / FailureMode / SkillCandidate / RepoMemory |
 | `agentops/core/recommendation.py` | 建议类型和建议模型 |
 | `agentops/core/artifact.py` | 输出产物模型 |
 | `agentops/core/evidence.py` | diff、git、CI、shell 和 test 公共证据模型 |
@@ -230,18 +280,29 @@ python -m pytest -v
 | `agentops/parsers/diff.py` | 将 unified git diff 规范化为公共 diff evidence models |
 | `agentops/parsers/shell_output.py` | 有界 shell 输出摘要与 pytest 摘要识别 |
 | `agentops/parsers/transcript.py` | 有界 agentops-session.md 任务日志解析为 SessionTrace |
+| `agentops/parsers/history.py` | 容错、有界地把 append-only `eval-history.jsonl` 读为 HistoryRecord |
 | `agentops/scanners/repo.py` | 只读仓库扫描与测试命令推断 |
 | `agentops/scanners/ci.py` | 只读 CI 配置检测与保守验证命令提取 |
 | `agentops/evaluators/readiness.py` | 确定性 readiness 扣分规则 |
 | `agentops/evaluators/scope_drift.py` | Phase 3.5 scope-drift 对账探针（声明 vs 真相） |
 | `agentops/evaluators/session_eval.py` | 将 scope-drift 对账结果转换为确定性 score、findings 和 recommendations |
 | `agentops/judges/intent.py` | intent judge 协议和确定性默认判官 |
+| `agentops/judges/llm_intent.py` | 可选 LLM 意图判官：逐条裁决 within_intent/drift，任何失败降级到确定性 |
+| `agentops/llm/client.py` | provider 无关的 LLMClient 协议 + LLMRequest/LLMResponse/LLMError |
+| `agentops/llm/openai_compatible.py` | 唯一适配器：仅标准库 urllib 调 OpenAI 兼容 /chat/completions |
+| `agentops/memory/trend.py` | 确定性分数/漂移走向投影（compute_score_trend） |
+| `agentops/memory/failure_modes.py` | 按稳定 code 聚类失败模式 + 派生 confirmed_drift（mine_failure_modes） |
+| `agentops/memory/candidates.py` | 从反复模式派生规则候选与 skill 候选（带 N/M 证据） |
+| `agentops/memory/narrator.py` | MemoryNarrator 接缝 + 确定性身份实现 DeterministicMemoryNarrator |
+| `agentops/memory/aggregate.py` | 把历史确定性装配为 RepoMemory（build_repo_memory） |
 | `agentops/hooks/session_log.py` | 会话日志新鲜度检查（stop-hook 核心） |
 | `agentops/writers/report.py` | Markdown 和 JSON readiness 产物写出 |
 | `agentops/writers/eval_report.py` | eval 报告、评分和 append-only 历史产物写出 |
+| `agentops/writers/memory_report.py` | 记忆报告/JSON/skill 候选产物写出（覆盖写，绝不 append） |
 | `agentops/writers/trace.py` | JSON workflow trace 产物写出 |
 | `agentops/runtime/scan.py` | scan workflow 编排、trace 写出和结构化失败 |
 | `agentops/runtime/eval.py` | session-eval workflow 编排、产物/trace 写出和结构化失败 |
+| `agentops/runtime/memory.py` | 记忆投影 workflow 编排、产物/trace 写出和结构化失败 |
 | `agentops/runtime/workflow.py` | 同步确定性 workflow runner |
 | `tests/test_cli.py` | CLI 行为测试 |
 | `tests/test_core_models.py` | 核心模型测试 |
@@ -260,6 +321,17 @@ python -m pytest -v
 | `tests/test_intent_judge.py` | Phase 4 intent judge seam 测试 |
 | `tests/test_eval_runtime.py` | Phase 4 session-eval workflow 集成测试 |
 | `tests/test_eval_report_writer.py` | Phase 4 eval 报告、评分与历史写出测试 |
+| `tests/test_llm_client.py` | Phase 4.5 LLMClient 协议与请求/响应模型测试 |
+| `tests/test_llm_openai_compatible.py` | Phase 4.5 OpenAI 兼容适配器测试（打桩，不触网） |
+| `tests/test_llm_intent_judge.py` | Phase 4.5 LLMIntentJudge 测试（解析/校验/降级） |
+| `tests/test_memory_models.py` | Phase 5 记忆核心模型序列化与不变量测试 |
+| `tests/test_history_reader.py` | Phase 5 eval-history.jsonl 读取器测试（容错、有界） |
+| `tests/test_memory_trend.py` | Phase 5 分数/漂移走向投影测试 |
+| `tests/test_memory_failure_modes.py` | Phase 5 失败模式聚类、排序与热点路径测试 |
+| `tests/test_memory_candidates.py` | Phase 5 规则候选与 skill 候选（N/M 证据）测试 |
+| `tests/test_memory_aggregate.py` | Phase 5 投影装配、确定性与叙述接缝测试 |
+| `tests/test_memory_report_writer.py` | Phase 5 记忆 md/json/skill 候选写出与覆盖测试 |
+| `tests/test_memory_runtime.py` | Phase 5 记忆 workflow 集成与结构化失败测试 |
 | `tests/test_repo_scanner.py` | 仓库扫描器测试 |
 | `tests/test_readiness_evaluator.py` | readiness 评分规则测试 |
 | `tests/test_report_writer.py` | readiness 产物写出测试 |
@@ -267,11 +339,13 @@ python -m pytest -v
 
 ## 下一步
 
-Phase 4 会话评测已全部完成（Task 1–7）。下一步：先为 LLM-backed `IntentJudge` 写一份新的纵向切片实施计划，再在现有 `IntentJudge` 接口后填充 LLM 判官——保持同一接口、测试中打桩、默认路径仍不触达网络/API key——判断 scope 差值是否落在任务意图之内。随后基于累积的 `eval-history.jsonl` 规划 Phase 5 仓库记忆：
+Phase 5 仓库记忆已全部完成（Task 1–8）。下一步：进入 Phase 6 改进资产——把 Phase 5 产出的规则候选 / skill 候选 / 失败模式落成可直接采纳的 `CLAUDE.md` / `AGENTS.md` 文本、hook 提案和工作流指引。先为 Phase 6 写一份新的纵向切片实施计划，再开始编码：
 
 ```text
 docs/superpowers/plans/
 ```
+
+两个问题留待依累积记忆再决定：一是是否让 `drift` 趋势反过来校准确定性分数（Phase 5 只读地报告趋势，从不移动分数）；二是是否用可选 LLM 叙述者填充已就位的 `MemoryNarrator` 接缝（Phase 5.5，只富化描述字段、不改结构事实）。
 
 实施前依次阅读 `agent.md`、本文档和 `docs/development-roadmap.md`，确认下一阶段边界；每次只完成一个 Task，先写失败测试再写最小实现。
 
@@ -297,10 +371,16 @@ docs/superpowers/plans/
 - CIDetector、ShellOutputParser、TranscriptParser 只采集和解析证据，不评分、不诊断、不调用 LLM；评分留到 Phase 3.5 及之后。
 - Phase 3.5 探针结论：确定性规则可靠覆盖"文件集合"层的 scope drift；意图判断（差值是否属于任务意图）是天花板，必须由 LLM 承担。Phase 4 把确定性对账作为第一道，LLM 只在 intent_alignment 处介入；并升级任务日志协议增加显式 `### Changed Files`、支持可配置 diff base。
 - Phase 4 会话评测复用确定性 `reconcile_scope` + `evaluate_scope` 作为第一道，唯一 LLM 接缝是 `IntentJudge.judge`（默认 `DeterministicIntentJudge` 给 `needs_review`、不触达模型）；workflow 控制流程，LLM 只增强意图裁决。`run_eval` 评估最新一条任务报告，eval 历史以 append-only `eval-history.jsonl` 累积——先存数据，Phase 5 再读，不在 Phase 4 实现记忆系统。`agentops eval` 对目标仓库只读，仅向 `--output` 写产物。
+- Phase 4.5 LLM 接缝 provider 无关：`LLMClient` 是文本进、文本出的最薄协议，结构化输出（JSON 解析/校验）是 judge 职责，故"响应不可解析"退化为一次安全降级而非崩溃。唯一适配器 `OpenAICompatibleClient` 仅用标准库 urllib，模型 id 不在库代码硬编码。`LLMIntentJudge` 任何失败（缺 key/缺 model/网络/解析/取值非法/覆盖不全）一律降级回确定性 `needs_review`，`judge()` 绝不因模型侧问题抛异常。裁决**不移动分数**，只丰富报告并向历史行追加 `verdict_summary`。
+- Phase 5 记忆是 `eval-history.jsonl` 的**确定性投影，不是新存储**：每次从历史重新生成并覆盖写出，历史仍是唯一真相来源，不引入第二个 append-only 日志；同样历史产出字节一致的记忆。所有蒸馏确定性（计数、走向、按稳定 code 聚类、按频次排序）。`MemoryNarrator` 接缝先就位、只给确定性身份实现（与 Phase 4 先就位 `IntentJudge` 同构），LLM 叙述者留到可选 Phase 5.5 且只能改写描述字段、绝不改动结构事实。记忆**只读取**分数算趋势，**从不移动分数**；`agentops memory` 是独立命令，`agentops eval` 不自动刷新记忆，二者解耦。
+- Phase 5 规则候选**复用现有 `Recommendation`/`RecommendationKind`**，不新增模型；规则/skill 候选都是带 N/M 证据的**候选数据**，落成最终 `CLAUDE.md`/`AGENTS.md` 文本、hook、workflow 资产是 Phase 6。复现阈值（≥2 次评测）与 scope 扣分权重一样是 provisional，待累积数据校准。
 
 ## 已知限制和风险
 
-- session-eval workflow 已接入并复用 scan 的 trace 事件/失败语义；但意图裁决仍是确定性占位（`needs_review`），尚无 LLM 判官，也仍没有 memory store 或 watcher。
+- session-eval workflow 已接入并复用 scan 的 trace 事件/失败语义；Phase 4.5 已在 `IntentJudge` 接缝后填充可选 `LLMIntentJudge`，Phase 5 已落地确定性记忆投影（`agentops memory`），但仍没有 watcher / 实时监督。
+- Phase 5 记忆的复现阈值（≥2 次评测才产出规则/skill 候选）与失败模式聚类、热点路径 top 10 上限都是 provisional，缺乏真实数据支撑，后续需用累积的 eval 历史校准（与 scope 权重同样的纪律）。
+- `MemoryNarrator` 接缝目前只有确定性身份实现：失败模式 summary / skill rationale 都是模板文案，尚无自然语言富化（留待可选 Phase 5.5 的 LLM 叙述者）。
+- 是否让累积的 `drift` 趋势反过来校准确定性分数仍未决：Phase 5 只读地报告趋势，从不移动分数；待趋势数据 justify 后再定。
 - `agentops eval` 默认 `--diff-base HEAD` 只对账工作区相对 HEAD 的 tracked 改动，不含 untracked 文件；需要纳入未跟踪文件或历史区间时需显式传 `--diff-base`。
 - session-eval 的 scope-discipline 扣分权重（undeclared 15 / declared_not_changed 10 / cross_module 10）与 readiness 权重一样是 provisional，缺乏真实数据支撑，后续需用累积的 eval 历史校准。
 - `ReadinessEvaluator` 当前信任内部 `RepoProfile` 已由 scanner 规范化；未来开放 SDK 前需要补充输入契约校验。
@@ -313,6 +393,18 @@ docs/superpowers/plans/
 
 | 日期 | 提交 | 内容 |
 | --- | --- | --- |
+| 2026-06-06 | `3d3f01d` | 暴露 `agentops memory` 仓库记忆命令 |
+| 2026-06-06 | `7624f17` | 写出仓库记忆报告、JSON 与 skill 候选 |
+| 2026-06-06 | `9993d0f` | 在叙述接缝后装配仓库记忆投影 |
+| 2026-06-06 | `cee5027` | 从失败模式派生规则候选与 skill 候选 |
+| 2026-06-06 | `5d6840d` | 挖掘确定性分数走向与失败模式 |
+| 2026-06-06 | `df79970` | 把累积 eval 历史读为类型化记录 |
+| 2026-06-06 | `a5bd1c1` | 新增仓库记忆核心模型 |
+| 2026-06-05 | `9b07adb` | 在 eval 中暴露可选 LLM 意图判官 |
+| 2026-06-05 | `1185f4d` | 在 eval 报告中呈现意图裁决与其来源 |
+| 2026-06-05 | `1535caf` | 通过 eval 工作流覆盖 LLM 意图判官 |
+| 2026-06-05 | `24334b1` | 新增带确定性降级的 LLM 意图判官 |
+| 2026-06-05 | `4708cb4` | 新增 OpenAI 兼容 LLM 客户端适配器（仅标准库，零新增依赖） |
 | 2026-06-04 | `1960990` | 暴露 `agentops eval` 会话评测命令 |
 | 2026-06-04 | `06a1afd` | 写出 session-eval 报告、评分与 append-only 历史 |
 | 2026-06-04 | `08330ef` | 通过 WorkflowRunner 运行 session-eval 流水线 |

@@ -30,13 +30,14 @@ AgentOps 的评估核心不是“复述 Agent 做了什么”，而是“对账 
 
 - **仓库就绪度扫描**：识别项目结构、测试命令、CI 配置（含验证命令）和 Agent 约束文件，输出 readiness 评分和可执行建议。
 - **仓库初始化**：安装会话协议，向 `CLAUDE.md` / `AGENTS.md` 写入托管指令块，约定 Agent 如何记录工作日志。
-- **会话评测（scope 维度）**：对账最新一条任务报告的声明与 git 真相，输出确定性的 scope-discipline 评分、带证据的发现和可执行建议，并把每次评测追加进 `eval-history.jsonl`。意图判断的 LLM 接缝已就位，默认给出确定性的 `needs_review`。
+- **会话评测（scope 维度）**：对账最新一条任务报告的声明与 git 真相，输出确定性的 scope-discipline 评分、带证据的发现和可执行建议，并把每次评测追加进 `eval-history.jsonl`。
+- **意图裁决（可选 LLM）**：`--intent-judge llm` 对每条确定性漂移发现逐条裁决“在意图内 / 真正越界”（`within_intent` / `drift`）；默认仍是离线、确定性的 `needs_review`，任何失败都自动降级。裁决只丰富报告，不改变确定性分数。
+- **仓库记忆（确定性投影）**：`agentops memory` 把累积的 `eval-history.jsonl` 蒸馏为仓库记忆——分数/漂移趋势、反复出现的失败模式（各带「N/M 次评测复现」证据）、带证据的规则候选和 skill 候选。记忆是历史的可再生投影：同样历史产出字节一致的记忆，离线、确定性，不移动任何评测分数。
 - **工作流追踪**：记录确定性的扫描和评测步骤及失败信息，便于检查执行过程。
 
 开发中：
 
 - **更多评测维度**：在 scope/boundary 之外，增加上下文质量、验证充分性等维度。
-- **意图裁决接入 LLM**：在现有可注入接口后填充 LLM 判官，判断差值是否落在任务意图之内。
 - **问题诊断**：识别上下文缺失、修改越界、验证不足、重复失败和任务膨胀。
 - **仓库级改进建议**：给出 `CLAUDE.md`、`AGENTS.md`、skill、hook、验证命令和上下文管理建议。
 
@@ -92,7 +93,40 @@ agentops eval --repo <repo-path>
 agentops eval --repo <repo-path> --session <session.md> --diff-base <ref> --output <output-path>
 ```
 
-意图判断的 LLM 接缝已经就位但默认不调用模型：确定性默认判官把每个 `intent_alignment` 标为 `needs_review`，整条默认路径无需 API key、无网络调用。后续版本会在同一接口后填充 LLM 判官。
+意图判断的 LLM 接缝已经就位但默认不调用模型：确定性默认判官把每个 `intent_alignment` 标为 `needs_review`，整条默认路径无需 API key、无网络调用。
+
+### 可选：用 LLM 做意图裁决
+
+默认 `agentops eval` 完全离线、确定性，不需要任何 API key。加上 `--intent-judge llm` 后，每条确定性漂移发现都会交给模型逐条裁决“在意图内还是真正越界”：
+
+```shell
+# 设置 OpenAI 兼容端点的 API key（默认端点为 mimo，可用 --intent-base-url / AGENTOPS_LLM_BASE_URL 覆盖）
+$env:AGENTOPS_LLM_API_KEY = "<your-key>"           # PowerShell
+agentops eval --repo <repo-path> --intent-judge llm --intent-model mimo-v2.5-pro
+```
+
+- `--intent-judge` 默认 `deterministic`（Phase 4 行为）；设为 `llm` 才启用模型。
+- `--intent-model` 选择模型 id；`--intent-base-url` / `AGENTOPS_LLM_BASE_URL` 覆盖端点；key 从环境变量 `AGENTOPS_LLM_API_KEY` 读取。
+- 缺 key、缺 model、网络故障或响应不可解析时，判官自动降级为确定性 `needs_review`，评测照常以退出码 0 完成，并在 stderr 打印一行降级说明。
+- LLM 裁决只丰富报告（按 `drift` / `within_intent` / `needs_review` 分组并标注来源），**不改变**确定性 scope 分数。
+- 适配器仅用标准库 HTTP 调 OpenAI 兼容接口，不引入任何新依赖（`import agentops` 无需任何第三方 SDK）。
+
+### 沉淀仓库记忆
+
+`agentops memory` 把累积的 `eval-history.jsonl` 确定性地投影为仓库记忆：逐行读历史（容忍空行、坏行，以及早期缺少裁决摘要的旧行），蒸馏出分数/漂移**趋势**、反复出现的**失败模式**、带证据的**规则候选**和 **skill 候选**，并覆盖写出记忆产物。它对目标仓库只读，只向 `--output` 目录写入；离线、确定性，不调用任何模型、不需 API key、零新增依赖。
+
+```shell
+# 把累积评测历史蒸馏为仓库记忆
+agentops memory --repo <repo-path>
+
+# --history 默认 <repo>/.agentops/eval-history.jsonl；--output 默认 .agentops
+agentops memory --repo <repo-path> --history <eval-history.jsonl> --output <output-path>
+```
+
+- 每个反复出现的失败模式都标注「在 N/M 次评测中复现」、热点路径和最近出现时间；规则候选与 skill 候选引用同一历史证据。
+- 记忆是历史的**可再生投影**：同样的历史产出字节一致的记忆，每次运行覆盖重写（绝不 append），`eval-history.jsonl` 仍是唯一真相来源。
+- 记忆只**读取**评测分数来计算趋势，从不重算或写回任何分数；是否让漂移趋势校准分数留待后续依累积数据再定。
+- 还没有跑过任何评测（历史缺失或为空）时，命令以结构化错误退出（退出码 1，提示先跑 `agentops eval`，无 traceback）。
 
 ## 输出示例
 
@@ -141,12 +175,21 @@ Score: 60/100
   eval-history.jsonl      # 每次评测追加一行（带时间戳），用于趋势分析
 ```
 
+`agentops memory` 把上面累积的 `eval-history.jsonl` 投影为一组记忆产物（覆盖写出）：
+
+```text
+<output>/
+  agentops-memory.md       # 人读记忆：趋势、失败模式（含 N/M + 热点路径）、规则候选、skill 候选
+  agentops-memory.json     # 结构化 RepoMemory（供后续阶段/工具链消费）
+  skill-candidates.md      # 聚焦、可评审的 skill 候选清单
+  agentops-trace.json      # 记忆 workflow trace
+```
+
 后续版本还会逐步增加：
 
 ```text
   suggested-claude-md.md
   suggested-agents-md.md
-  skill-candidates.md
 ```
 
 | 文件 | 用途 |
@@ -155,10 +198,13 @@ Score: 60/100
 | `agentops-session.md` | Agent 按协议追加的有界任务日志 |
 | `agentops-report.md` | 面向开发者的仓库 readiness 或会话评测报告 |
 | `agentops-score.json` | 面向工具链的结构化评分和诊断证据 |
-| `agentops-trace.json` | 扫描 workflow 的执行步骤和失败信息 |
+| `agentops-trace.json` | 扫描 / 评测 / 记忆 workflow 的执行步骤和失败信息 |
+| `eval-history.jsonl` | 每次评测追加一行的 append-only 历史，记忆的唯一数据来源 |
+| `agentops-memory.md` | 仓库记忆报告：趋势、失败模式、规则候选、skill 候选 |
+| `agentops-memory.json` | 结构化仓库记忆，供 Phase 6 / 工具链消费 |
+| `skill-candidates.md` | 可以沉淀为 skill 的重复经验 |
 | `suggested-claude-md.md` | `CLAUDE.md` 改进草案 |
 | `suggested-agents-md.md` | `AGENTS.md` 改进草案 |
-| `skill-candidates.md` | 可以沉淀为 skill 的重复经验 |
 
 ## 项目边界
 
@@ -177,4 +223,4 @@ python -m pytest
 
 ## 开发状态
 
-项目仍在早期开发中，接口可能调整。当前已经打通仓库 readiness 扫描、仓库初始化、确定性 workflow 追踪，以及 scope 维度的会话评测（`agentops eval`，确定性评分 + 可注入的意图接缝 + `eval-history.jsonl` 数据累积）；意图裁决接入 LLM、更多评测维度、问题诊断和改进资产生成正在按阶段推进。欢迎提交 Issue 讨论真实 AI coding 工作流中的使用场景和需求。
+项目仍在早期开发中，接口可能调整。当前已经打通仓库 readiness 扫描、仓库初始化、确定性 workflow 追踪，以及 scope 维度的会话评测（`agentops eval`，确定性评分 + `eval-history.jsonl` 数据累积），并支持可选的 LLM 意图裁决（`--intent-judge llm`，对每条漂移发现给出 `within_intent` / `drift`，任何失败都降级为确定性 `needs_review`，且不改变分数），以及仓库记忆的确定性投影（`agentops memory`，把累积历史蒸馏为趋势、失败模式、规则候选和 skill 候选，离线、可再生、不移动分数）；更多评测维度、问题诊断和改进资产生成正在按阶段推进。欢迎提交 Issue 讨论真实 AI coding 工作流中的使用场景和需求。

@@ -30,13 +30,14 @@ Available today:
 
 - **Repository readiness scanning**: Identify project structure, test commands, CI configuration (including validation commands), and agent instruction files, then emit a readiness score with actionable suggestions.
 - **Repository initialization**: Install the session protocol and write a managed instruction block into `CLAUDE.md` / `AGENTS.md` so agents record their work in a known format.
-- **Session evaluation (scope dimension)**: Reconcile the most recent task report's declaration against git truth, emit a deterministic scope-discipline score with evidence-backed findings and actionable recommendations, and append each eval to `eval-history.jsonl`. The intent-judgment LLM seam is in place and defaults to a deterministic `needs_review`.
+- **Session evaluation (scope dimension)**: Reconcile the most recent task report's declaration against git truth, emit a deterministic scope-discipline score with evidence-backed findings and actionable recommendations, and append each eval to `eval-history.jsonl`.
+- **Intent verdict (optional LLM)**: `--intent-judge llm` gives each deterministic drift finding a per-finding verdict — within the task's intent or real drift (`within_intent` / `drift`). The default stays offline and deterministic (`needs_review`), and any failure degrades automatically. The verdict only enriches the report; it never moves the deterministic score.
+- **Repository memory (deterministic projection)**: `agentops memory` distills the accumulated `eval-history.jsonl` into repository memory — a score/drift trend, recurring failure modes (each carrying "recurred in N/M evals" evidence), evidence-backed rule candidates, and skill candidates. The memory is a regenerable projection of history: the same history yields a byte-identical memory, offline and deterministic, and it never moves any eval score.
 - **Workflow tracing**: Record deterministic scan and eval steps and failures for inspection.
 
 Under development:
 
 - **More evaluation dimensions**: Add context-quality and verification-sufficiency on top of scope/boundary.
-- **LLM-backed intent verdict**: Fill the existing injectable interface with an LLM judge that decides whether a gap falls within the task's intent.
 - **Actionable diagnosis**: Detect missing context, scope drift, insufficient verification, repeated failures, and task expansion.
 - **Repository-level improvements**: Suggest updates to `CLAUDE.md`, `AGENTS.md`, skills, hooks, verification commands, and context-management practices.
 
@@ -92,7 +93,41 @@ agentops eval --repo <repo-path>
 agentops eval --repo <repo-path> --session <session.md> --diff-base <ref> --output <output-path>
 ```
 
-The intent-judgment LLM seam is in place but the default path calls no model: a deterministic judge marks every `intent_alignment` as `needs_review`, with no API key or network. A later release fills the same interface with an LLM judge.
+The intent-judgment LLM seam is in place but the default path calls no model: a deterministic judge marks every `intent_alignment` as `needs_review`, with no API key or network.
+
+### Optional: judge intent with an LLM
+
+By default `agentops eval` is fully offline and deterministic and needs no API key. Adding `--intent-judge llm` sends each deterministic drift finding to a model for a per-finding "within intent vs real drift" verdict:
+
+```shell
+# Set the API key for your OpenAI-compatible endpoint (default endpoint is mimo;
+# override with --intent-base-url / AGENTOPS_LLM_BASE_URL)
+export AGENTOPS_LLM_API_KEY="<your-key>"            # bash
+agentops eval --repo <repo-path> --intent-judge llm --intent-model mimo-v2.5-pro
+```
+
+- `--intent-judge` defaults to `deterministic` (the Phase 4 behavior); set it to `llm` to enable the model.
+- `--intent-model` selects the model id; `--intent-base-url` / `AGENTOPS_LLM_BASE_URL` override the endpoint; the key is read from the `AGENTOPS_LLM_API_KEY` environment variable.
+- If the key or model is missing, the network fails, or the response is unparsable, the judge degrades to the deterministic `needs_review`, the eval still exits 0, and one fallback notice is printed to stderr.
+- LLM verdicts only enrich the report (grouped by `drift` / `within_intent` / `needs_review` and labeled by source); they **do not** move the deterministic scope score.
+- The adapter calls the OpenAI-compatible endpoint over standard-library HTTP and adds no new dependency (`import agentops` needs no third-party SDK).
+
+### Distill repository memory
+
+`agentops memory` projects the accumulated `eval-history.jsonl` into repository memory deterministically: it reads every history line (tolerating blank lines, corrupt lines, and older lines that predate the verdict summary), distills a score/drift **trend**, recurring **failure modes**, evidence-backed **rule candidates**, and **skill candidates**, then overwrites the memory artifacts. It is read-only with respect to the target repository and only writes under `--output`; it is offline and deterministic, calls no model, needs no API key, and adds no dependency.
+
+```shell
+# Distill the accumulated eval history into repository memory
+agentops memory --repo <repo-path>
+
+# --history defaults to <repo>/.agentops/eval-history.jsonl; --output defaults to .agentops
+agentops memory --repo <repo-path> --history <eval-history.jsonl> --output <output-path>
+```
+
+- Each recurring failure mode is annotated with "recurred in N/M evals", its hot paths, and when it was last seen; rule and skill candidates cite the same historical evidence.
+- The memory is a **regenerable projection**: the same history yields a byte-identical memory, and each run overwrites (never appends); `eval-history.jsonl` stays the single source of truth.
+- The memory only **reads** eval scores to compute a trend; it never recomputes or writes back any score. Whether the drift trend should calibrate the score is deferred until the accumulated data justifies it.
+- If no eval has run yet (history missing or empty), the command exits with a structured error (exit 1, a hint to run `agentops eval` first, no traceback).
 
 ## Output
 
@@ -141,12 +176,21 @@ Score: 60/100
   eval-history.jsonl      # one appended line per eval (timestamped) for trend analysis
 ```
 
+`agentops memory` projects the accumulated `eval-history.jsonl` above into a set of memory artifacts (overwritten each run):
+
+```text
+<output>/
+  agentops-memory.md       # human-readable memory: trend, failure modes (with N/M + hot paths), rule candidates, skill candidates
+  agentops-memory.json     # structured RepoMemory (for later phases / tool integrations)
+  skill-candidates.md      # focused, reviewable list of skill candidates
+  agentops-trace.json      # memory workflow trace
+```
+
 Future releases will add:
 
 ```text
   suggested-claude-md.md
   suggested-agents-md.md
-  skill-candidates.md
 ```
 
 | File | Purpose |
@@ -155,10 +199,13 @@ Future releases will add:
 | `agentops-session.md` | Bounded task log the agent appends to under the protocol |
 | `agentops-report.md` | Developer-facing repository readiness or session evaluation report |
 | `agentops-score.json` | Structured scores and diagnostic evidence for tool integrations |
-| `agentops-trace.json` | Scan workflow steps and failure details |
+| `agentops-trace.json` | Scan / eval / memory workflow steps and failure details |
+| `eval-history.jsonl` | Append-only history (one line per eval), the sole data source for memory |
+| `agentops-memory.md` | Repository memory report: trend, failure modes, rule candidates, skill candidates |
+| `agentops-memory.json` | Structured repository memory for Phase 6 / tool integrations |
+| `skill-candidates.md` | Recurring lessons that may become reusable skills |
 | `suggested-claude-md.md` | Draft improvements for `CLAUDE.md` |
 | `suggested-agents-md.md` | Draft improvements for `AGENTS.md` |
-| `skill-candidates.md` | Recurring lessons that may become reusable skills |
 
 ## Project Scope
 
@@ -177,4 +224,4 @@ The project advances deterministic-rules-first, writing a failing test before th
 
 ## Development Status
 
-AgentOps Harness is an early-stage open-source project, and interfaces may change. Repository readiness scanning, repository initialization, deterministic workflow tracing, and scope-dimension session evaluation (`agentops eval`, deterministic scoring plus an injectable intent seam and an accumulating `eval-history.jsonl`) work today; the LLM-backed intent verdict, more evaluation dimensions, diagnosis, and improvement-asset generation are landing phase by phase. Issues and discussions about real AI coding workflows are welcome.
+AgentOps Harness is an early-stage open-source project, and interfaces may change. Repository readiness scanning, repository initialization, deterministic workflow tracing, and scope-dimension session evaluation (`agentops eval`, deterministic scoring plus an accumulating `eval-history.jsonl`) work today, along with an optional LLM intent verdict (`--intent-judge llm`, a `within_intent` / `drift` verdict per drift finding that degrades to the deterministic `needs_review` on any failure and never moves the score) and a deterministic repository-memory projection (`agentops memory`, distilling the accumulated history into a trend, failure modes, rule candidates, and skill candidates — offline, regenerable, and never moving the score); more evaluation dimensions, diagnosis, and improvement-asset generation are landing phase by phase. Issues and discussions about real AI coding workflows are welcome.

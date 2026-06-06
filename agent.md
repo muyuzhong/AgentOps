@@ -222,17 +222,17 @@ agentops_harness/
 
 ## 当前下一步
 
-Phase 4 会话评测已完成：`agentops eval` 通过 `WorkflowRunner` 串联 TranscriptParser、GitAnalyzer、`reconcile_scope`、可注入的 `IntentJudge` 和 `evaluate_scope`，对账最新一条任务报告的声明与 git 真相，写出 `agentops-report.md`、`agentops-score.json`、`agentops-trace.json`，并向 append-only 的 `eval-history.jsonl` 追加一行带时间戳的记录。任务日志协议支持显式 `### Changed Files`，diff base 可配置（默认 `HEAD`）。`python -m pytest` 共 231 passed。
+Phase 5 仓库记忆已完成：新增只读命令 `agentops memory`，把累积的 `eval-history.jsonl` 确定性地投影为仓库记忆。`agentops memory --repo <path> [--history <jsonl>] [--output <dir>]` 逐行读历史（容忍空行/坏行，以及 4.5 前缺 `verdict_summary` 的旧行），蒸馏出四样东西——分数/漂移**趋势**、反复出现的**失败模式**（各带 N/M 复现、热点路径、最近出现）、带证据的**规则候选**（复用现有 `Recommendation`）、可复用的 **skill 候选**——并覆盖写出 `agentops-memory.md`、`agentops-memory.json`、`skill-candidates.md` 与 `agentops-trace.json`。记忆是历史的可再生投影：同样历史产出字节一致的记忆，每次覆盖重写，绝不 append。`python -m pytest` 共 337 passed。
 
-Phase 3.5 探针结论见 `docs/superpowers/findings/2026-06-03-scope-drift-spike.md`：确定性规则可靠覆盖文件集合层的 scope drift，意图判断需 LLM。Phase 4 据此把确定性对账作为第一道，LLM 只在 `intent_alignment` 处介入，默认 `DeterministicIntentJudge` 给出 `needs_review` 且不触达任何模型。
+Phase 5 的边界严格：全部蒸馏都是确定性的（计数、走向、按稳定 code 聚类、按频次排序）；记忆**从不**重算或写回任何评测分数（只读地报告 drift 趋势）。`MemoryNarrator` 接缝已就位但本阶段只有确定性身份实现（与 Phase 4 先就位的 `IntentJudge` 同构）——LLM 叙述者留到可选的 Phase 5.5，且只能改写描述字段（summary / rationale / title），绝不改动结构事实（code / 计数 / 路径）。`agentops memory` 不调用任何 LLM、不触网、不需 key、零新增运行时依赖；缺失/空历史以结构化错误退出（退出码 1，stderr 提示"先跑 agentops eval"，无 traceback）。
 
-下一步：在现有 `IntentJudge` 接口后填充 LLM 判官（保持同一接口、测试中打桩、默认路径仍无网络/API key），判断 scope 差值是否落在任务意图之内；随后基于累积的 `eval-history.jsonl` 规划 Phase 5 仓库记忆。
+下一步：进入 Phase 6 改进资产——把规则候选 / skill 候选 / 失败模式落成可直接采纳的 `CLAUDE.md` / `AGENTS.md` 文本、hook 提案和工作流指引。两个问题留待依累积记忆再定：是否让 `drift` 趋势校准确定性分数；是否用可选 LLM 叙述者填充 `MemoryNarrator` 接缝（Phase 5.5）。
 
 实施时依次执行：
 
 1. 阅读 `docs/project-memory.md`。
 2. 阅读 `docs/development-roadmap.md`，确认下一阶段边界。
-3. 先为 LLM intent judge 写一份新的纵向切片实施计划，再开始编码。
+3. 先为 Phase 6 改进资产写一份新的纵向切片实施计划，再开始编码。
 
 每次只完成计划中的一个 Task，先写失败测试，再写最小实现，然后运行测试并提交。不要一次实现后续 Phase 的能力。
 

@@ -64,7 +64,8 @@ LLM enriches diagnosis and recommendations.
 
 ```text
 agentops scan --repo <repo-path>
-agentops eval --repo <repo-path> [--session <session.md>] [--diff-base <ref>] [--output <dir>]
+agentops eval --repo <repo-path> [--session <session.md>] [--diff-base <ref>] [--output <dir>] [--intent-judge {deterministic,llm}] [--intent-model <id>] [--intent-base-url <url>]
+agentops memory --repo <repo-path> [--history <eval-history.jsonl>] [--output <dir>]
 ```
 
 后续可以增加 SDK 和 Studio。
@@ -90,9 +91,53 @@ parse_session → select_task → collect_diff → reconcile_scope → judge_int
 
 `run_eval` 通过同一个 `WorkflowRunner` 编排上述步骤：取最新一条任务报告作为声明，采集相对可配置 base（默认 `HEAD`）的 git diff 作为真相，用确定性的 `reconcile_scope` 找出文件集合层的差值，把差值转成 `EvalResult` 的确定性 scope-discipline 评分、带证据的 `Finding` 和可执行 `Recommendation`，再把"差值是否落在任务意图之内"交给可注入的 `IntentJudge`。
 
-LLM 只在 `judge_intent` 这一处介入，且 Phase 4 不填充：默认 `DeterministicIntentJudge` 对每个 `intent_alignment` 给出 `needs_review`（`source=deterministic`），整条默认路径无需 API key、无网络调用；真正的 LLM 判官后续按同一接口（`IntentJudge` 协议，测试中打桩）注入。每次评测向 `--output` 写出 `agentops-report.md`、`agentops-score.json`、`agentops-trace.json`，并向 append-only 的 `eval-history.jsonl` 追加一行带时间戳的记录，供 Phase 5 趋势分析使用。
+LLM 只在 `judge_intent` 这一处介入。默认 `DeterministicIntentJudge` 对每个 `intent_alignment` 给出 `needs_review`（`source=deterministic`），整条默认路径无需 API key、无网络调用。Phase 4.5 在同一 `IntentJudge` 接口后填充了可选的 `LLMIntentJudge`（`--intent-judge llm`）：对每条确定性漂移发现逐条裁决 `within_intent` / `drift`（`source=llm`），任何失败都降级回确定性 `needs_review`。每次评测向 `--output` 写出 `agentops-report.md`、`agentops-score.json`、`agentops-trace.json`，并向 append-only 的 `eval-history.jsonl` 追加一行带时间戳的记录，供 Phase 5 趋势分析使用。
 
 评测的核心不是"复述 agent 做了什么",而是"对账 agent 声称的和实际发生的"。agent 自述的 session md 是声明,git diff 和命令退出码是 agent 无法伪造的 ground truth,两者之间的差值才是诊断的核心信号。
+
+### 意图裁决的 LLM 接缝（Phase 4.5）
+
+确定性规则只能发现"文件集合/广度"层的差值（哪些路径未声明、改动横跨几个模块），无法判断这些差值是否属于任务意图——同样是 `undeclared_change`，`tests/test_auth.py` 往往是顺带的合理改动，`src/billing.py` 则可能是真正越界。Phase 4.5 在已就位的 `IntentJudge` 接缝后填充这一处语义判断，且严格遵守"确定性默认、LLM 可选、裁决不移动分数"的边界。
+
+接缝形状（provider 无关）：
+
+```text
+agentops/llm/client.py            LLMClient 协议（文本进、文本出）+ LLMRequest / LLMResponse / LLMError
+agentops/llm/openai_compatible.py OpenAICompatibleClient：唯一适配器，仅用标准库 urllib 调 OpenAI 兼容 /chat/completions
+agentops/judges/llm_intent.py     LLMIntentJudge：选发现 → 拼提示 → 调用 → 解析/校验 → 映射；任何失败降级
+```
+
+设计要点：
+
+- **provider 无关**：`LLMClient` 是文本进、文本出的最薄协议；结构化输出（严格 JSON 的解析与校验）是 judge 的职责，于是"响应无法解析"退化为一次安全降级而不是崩溃。
+- **零新增依赖**：唯一适配器 `OpenAICompatibleClient` 只用标准库 `urllib`，适配任何 OpenAI 兼容网关（默认指向 mimo `mimo-v2.5-pro`，可经 `--intent-base-url` / `AGENTOPS_LLM_BASE_URL` 覆盖）。`import agentops` 永远不需要第三方 SDK。模型 id 由 `--intent-model` 提供，库代码不硬编码任何模型层级。
+- **逐条裁决**：`LLMIntentJudge` 只把 `undeclared_change` 和 `cross_module_breadth` 交给模型逐条裁决（`within_intent` / `drift`），并把模型回复严格解析、校验取值与覆盖完整性后映射为 `IntentVerdict(source="llm")`。推理型模型会把"思考"算进 token 上限，故请求时预留充裕的 `max_tokens`。
+- **任何失败降级**：缺 SDK/缺 key/缺 model/网络错误/响应不可解析/取值非法/覆盖不全——一律委托 `DeterministicIntentJudge` 返回 `needs_review`（`source="deterministic"`），`judge()` 绝不因模型侧问题向上抛异常。受限/离线环境下行为与默认路径完全一致。
+- **裁决不移动分数**：`build_eval_result` 仍只用确定性 `evaluate_scope` 计算 scope-discipline 分数；`intent_verdicts` 只是并列记录的富化信息。一次降级运行与默认运行同分。是否让累积的 `drift` 裁决反过来校准分数，留到 Phase 5 用数据决定。
+- **产物富化**：报告把裁决按 `drift` / `within_intent` / `needs_review` 分组并标注来源；`eval-history.jsonl` 行追加按裁决/来源的计数摘要（`verdict_summary`），供 Phase 5 读取 drift 趋势。仅确定性裁决时报告保持 Phase 4 的扁平形态。
+
+### 仓库记忆的确定性投影（Phase 5）
+
+确定性评测每次向 append-only 的 `eval-history.jsonl` 追加一行。Phase 5 增加一条**只读**的记忆流水线，把累积的历史确定性地投影为仓库记忆，与 scan/eval 共用同一个 `WorkflowRunner`，不改动 eval 流水线分毫：
+
+```text
+agentops memory --repo <path>
+  read_history             eval-history.jsonl  → tuple[HistoryRecord, ...]   （跳过空行/坏行/旧行容错）
+  → build_repo_memory      （确定性投影；叙述者默认身份实现）
+       ├─ compute_score_trend      分数 + 漂移随时间 → ScoreTrend
+       ├─ mine_failure_modes       按稳定 code 聚类 findings + drift 裁决 → FailureMode[]
+       ├─ derive_rule_candidates   反复模式 → Recommendation[]（N/M 证据；复用 RecommendationKind）
+       ├─ derive_skill_candidates  反复模式 + 热点路径 → SkillCandidate[]
+       └─ MemoryNarrator.narrate   （确定性默认：原样返回投影）
+  → write_memory_artifacts  agentops-memory.md、agentops-memory.json、skill-candidates.md、agentops-trace.json
+```
+
+记忆蒸馏四样东西：分数/漂移**趋势**、反复出现的**失败模式**（按稳定 code 聚类，各带「N/M 次评测复现」证据、热点路径与最近出现时间）、带证据的**规则候选**（复用现有 `Recommendation`，不新增模型）、可复用的 **skill 候选**。设计边界：
+
+- **记忆是投影，不是新存储**：记忆产物每次从 `eval-history.jsonl` 重新生成并覆盖写出，历史仍是唯一真相来源；不引入第二个 append-only 日志。同样的历史产出字节一致的记忆。
+- **确定性投影，接缝先就位**：所有蒸馏都是确定性的（计数、走向、按稳定 code 聚类、按频次排序）。`MemoryNarrator` 接缝已就位但本阶段只有确定性身份实现（与 Phase 4 先就位 `IntentJudge` 同构）；可选的 LLM 叙述者留到 Phase 5.5，且**只能改写描述字段**（summary / rationale / title），绝不改动结构事实（code / 计数 / 路径），与 LLM 意图判官「绝不重新推导文件集合」同构。
+- **裁决不移动分数**：记忆只**读取** `result.score` 计算趋势、读取 `verdict_summary` 报告 drift 走向，从不重算、扣减或写回任何评测分数。是否让 drift 趋势校准分数仍留待累积数据justify。
+- **只读、离线、零新增依赖**：`agentops memory` 对目标仓库只读（仅向 `--output` 写产物），不调用任何 LLM、不触网、不需 key；缺失/空历史以结构化 `MemoryWorkflowError` 退出（退出码 1，提示先跑 `agentops eval`，无 traceback）。`agentops eval` 不会自动刷新记忆，二者解耦。
 
 ### 证据分层
 
@@ -112,14 +157,16 @@ LLM 只在 `judge_intent` 这一处介入，且 Phase 4 不填充：默认 `Dete
 | --- | --- | --- |
 | `core/` | 定义稳定的领域模型和序列化契约 | 已建立基础模型 |
 | `scanners/` | 只读扫描仓库结构、约束文件、CI 和测试线索 | Phase 1 已实现；Phase 3 增加 CI 验证命令提取 |
-| `parsers/` | 解析 transcript、diff、shell output、测试结果 | Phase 3 已实现 diff、shell output、transcript 解析；Phase 4 解析可选 `### Changed Files` |
+| `parsers/` | 解析 transcript、diff、shell output、测试结果、累积 eval 历史 | Phase 3 已实现 diff、shell output、transcript 解析；Phase 4 解析可选 `### Changed Files`；Phase 5 增加容错的 `eval-history.jsonl` 读取器 |
 | `analyzers/` | 通过受控只读 Git 子进程采集 branch、status 和规范化 diff | Phase 3 已实现 GitAnalyzer；Phase 4 支持可配置 diff base |
 | `initializers/` | 显式安装 session protocol、托管指令块和 session log 策略 | Phase 3 已实现 |
 | `evaluators/` | 使用确定性规则生成评分和 Finding | Phase 1 readiness 规则；Phase 3.5 scope-drift 对账；Phase 4 确定性 session-eval 评分 |
-| `judges/` | 意图裁决可注入接口与确定性默认判官（唯一 LLM 接缝） | Phase 4 已实现确定性默认判官，LLM 判官待填充 |
+| `judges/` | 意图裁决可注入接口、确定性默认判官与可选 LLM 判官（唯一 LLM 接缝） | Phase 4 确定性默认判官；Phase 4.5 增加可选 `LLMIntentJudge`（任何失败降级到确定性） |
+| `llm/` | provider 无关的 `LLMClient` 接缝与唯一的 OpenAI 兼容适配器（仅标准库） | Phase 4.5 已实现；零新增依赖 |
+| `memory/` | 把累积 eval 历史确定性地投影为趋势/失败模式/规则候选/skill 候选，并在叙述接缝后装配 | Phase 5 已实现；确定性默认、不移动分数、零新增依赖 |
 | `recommenders/` | 诊断 Finding 并输出优化指引,不直接生成最终文本 | 后续扩展 |
-| `writers/` | 输出 Markdown、JSON 和建议草案 | Phase 2 readiness 与 workflow trace 产物；Phase 4 eval 报告/评分/历史产物 |
-| `runtime/` | 串联各模块，维护 workflow 状态和事件 | Phase 2 scan workflow 编排、错误隔离和 trace；Phase 4 session-eval workflow |
+| `writers/` | 输出 Markdown、JSON 和建议草案 | Phase 2 readiness 与 workflow trace 产物；Phase 4 eval 报告/评分/历史产物；Phase 5 记忆报告/JSON/skill 候选产物 |
+| `runtime/` | 串联各模块，维护 workflow 状态和事件 | Phase 2 scan workflow 编排、错误隔离和 trace；Phase 4 session-eval workflow；Phase 5 记忆投影 workflow |
 
 ## 核心数据模型
 
@@ -139,6 +186,8 @@ LLM 只在 `judge_intent` 这一处介入，且 Phase 4 不填充：默认 `Dete
 | `ShellResult` / `TestResult` | 保存有界 shell 输出摘要和受支持的测试结果 |
 | `SessionTrace` / `TaskReport` / `VerificationRecord` | 保存有界任务日志的规范化证据 |
 | `EvalResult` / `IntentVerdict` | 保存单次会话评测结果与意图裁决（intent_alignment 的 LLM 接缝载体） |
+| `HistoryRecord` | 保存 `eval-history.jsonl` 一行经解析后的结构化记录（容错、有界） |
+| `ScoreTrend` / `FailureMode` / `SkillCandidate` / `RepoMemory` | 保存 eval 历史的确定性记忆投影：趋势、失败模式、skill 候选与聚合记忆 |
 
 后续按真实需求增加：
 
@@ -206,7 +255,7 @@ agentops scan --repo <repo-path>
 每次 eval 完成后,诊断结果追加到 `.agentops/eval-history.jsonl`。不实现完整的记忆系统,只是把数据先存下来。这样:
 
 - Phase 4 的 eval 本身就产出历史数据。
-- Phase 5 的记忆系统可以从这些历史数据中读取,而不是从零开始。
+- Phase 5 的记忆系统（`agentops memory`）从这些历史数据中读取并确定性地投影出趋势、失败模式、规则候选和 skill 候选，而不是从零开始。
 - 用户从 Phase 4 开始就能看到"这个仓库的问题在恶化还是在改善"的趋势。
 
 ## 架构约束
