@@ -14,6 +14,7 @@ from agentops.initializers import SessionLogPolicy, run_init
 from agentops.judges import IntentJudge, LLMIntentJudge
 from agentops.llm import LLMClient, LLMError, OpenAICompatibleClient
 from agentops.runtime.eval import EvalWorkflowError, run_eval
+from agentops.runtime.improve import ImproveWorkflowError, run_suggest
 from agentops.runtime.memory import MemoryWorkflowError, run_memory
 from agentops.runtime.scan import ScanWorkflowError, run_scan
 
@@ -115,6 +116,13 @@ def build_parser() -> argparse.ArgumentParser:
     memory_parser.add_argument("--repo", required=True, type=Path)
     memory_parser.add_argument("--history", type=Path, default=None)
     memory_parser.add_argument("--output", type=Path, default=Path(".agentops"))
+    suggest_parser = subparsers.add_parser(
+        "suggest",
+        help="Project accumulated eval history into adoptable improvement assets.",
+    )
+    suggest_parser.add_argument("--repo", required=True, type=Path)
+    suggest_parser.add_argument("--history", type=Path, default=None)
+    suggest_parser.add_argument("--output", type=Path, default=Path(".agentops"))
     return parser
 
 
@@ -249,6 +257,39 @@ def main(argv: list[str] | None = None) -> int:
             f"{len(memory.rule_candidates)} rule candidate(s), "
             f"{len(memory.skill_candidates)} skill candidate(s)"
         )
+        for artifact in run.artifacts:
+            print(f"Wrote {artifact.path}")
+        return 0
+
+    if args.command == "suggest":
+        # 未显式提供 --history 时回退到仓库内默认的累积历史。
+        history_path = (
+            args.history
+            if args.history is not None
+            else args.repo / ".agentops" / "eval-history.jsonl"
+        )
+        try:
+            run = run_suggest(args.repo, history_path, args.output)
+        except ImproveWorkflowError as error:
+            # 缺失/空历史等结构化失败：打印保留下来的失败原因（含“先跑 agentops eval”
+            # 的指引），不暴露 traceback；意外异常不被隐藏。
+            message = (
+                error.trace.failures[0].message
+                if error.trace.failures
+                else "unknown error"
+            )
+            print(f"AgentOps suggest failed: {message}", file=sys.stderr)
+            if error.trace_artifact is not None:
+                print(f"Wrote {error.trace_artifact.path}", file=sys.stderr)
+            return 1
+        assets = run.assets
+        print(
+            f"AgentOps repository suggestions: {assets.sample_count} eval(s), "
+            f"{len(assets.instruction_suggestions)} instruction suggestion(s), "
+            f"{len(assets.hook_proposals)} hook proposal(s), "
+            f"{len(assets.skill_candidates)} skill candidate(s)"
+        )
+        print(assets.trend_summary)
         for artifact in run.artifacts:
             print(f"Wrote {artifact.path}")
         return 0
