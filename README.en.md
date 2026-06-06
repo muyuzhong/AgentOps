@@ -33,13 +33,14 @@ Available today:
 - **Session evaluation (scope dimension)**: Reconcile the most recent task report's declaration against git truth, emit a deterministic scope-discipline score with evidence-backed findings and actionable recommendations, and append each eval to `eval-history.jsonl`.
 - **Intent verdict (optional LLM)**: `--intent-judge llm` gives each deterministic drift finding a per-finding verdict — within the task's intent or real drift (`within_intent` / `drift`). The default stays offline and deterministic (`needs_review`), and any failure degrades automatically. The verdict only enriches the report; it never moves the deterministic score.
 - **Repository memory (deterministic projection)**: `agentops memory` distills the accumulated `eval-history.jsonl` into repository memory — a score/drift trend, recurring failure modes (each carrying "recurred in N/M evals" evidence), evidence-backed rule candidates, and skill candidates. The memory is a regenerable projection of history: the same history yields a byte-identical memory, offline and deterministic, and it never moves any eval score.
+- **Improvement assets (deterministic projection)**: `agentops suggest` projects repository memory plus the repo's current instruction files into ready-to-adopt assets — an `agentops:repo-rules` managed block for `CLAUDE.md` / `AGENTS.md` (additions) with deterministic trim diagnostics (subtractions: over-budget length, verbatim README duplication), hook proposals mapping recurring failure modes to existing `agentops` commands (with a `settings.json` snippet), plus workflow guidance and skill scaffolds. It is read-only with respect to the target repo (it never rewrites the instruction files), offline, regenerable, and never moves the score.
 - **Workflow tracing**: Record deterministic scan and eval steps and failures for inspection.
 
 Under development:
 
 - **More evaluation dimensions**: Add context-quality and verification-sufficiency on top of scope/boundary.
 - **Actionable diagnosis**: Detect missing context, scope drift, insufficient verification, repeated failures, and task expansion.
-- **Repository-level improvements**: Suggest updates to `CLAUDE.md`, `AGENTS.md`, skills, hooks, verification commands, and context-management practices.
+- **Real-time supervision**: Observe the AI coding process, surface risks, and suggest interventions (Phase 7).
 
 ## Installation
 
@@ -129,6 +130,24 @@ agentops memory --repo <repo-path> --history <eval-history.jsonl> --output <outp
 - The memory only **reads** eval scores to compute a trend; it never recomputes or writes back any score. Whether the drift trend should calibrate the score is deferred until the accumulated data justifies it.
 - If no eval has run yet (history missing or empty), the command exits with a structured error (exit 1, a hint to run `agentops eval` first, no traceback).
 
+### Generate improvement assets
+
+`agentops suggest` re-projects the accumulated `eval-history.jsonl` into repository memory, reads the repo's current `CLAUDE.md` / `AGENTS.md` / `README.md` read-only, and projects memory plus those instruction files into **ready-to-adopt improvement assets** deterministically, overwriting them each run. It is read-only with respect to the target repository and only writes under `--output`; it is offline and deterministic, calls no model, needs no API key, and adds no dependency.
+
+```shell
+# Project accumulated memory into adoptable improvement assets
+agentops suggest --repo <repo-path>
+
+# --history defaults to <repo>/.agentops/eval-history.jsonl; --output defaults to .agentops
+agentops suggest --repo <repo-path> --history <eval-history.jsonl> --output <output-path>
+```
+
+- **`CLAUDE.md` / `AGENTS.md` suggestions**: a paste-ready `agentops:repo-rules` managed block (one bullet per recurring rule, each citing its N/M recurrence — additions), deterministic trim diagnostics (subtractions: over the ~200-line budget, verbatim README duplication), and a "create this file" note when the target is missing. These `repo-rules` markers are intentionally distinct from `init`'s `session-protocol` markers, so both blocks coexist in one file.
+- **Hook proposals**: for each failure mode at or above the recurrence threshold, a Claude Code hook (event + an existing `agentops` command) with a copy-paste `settings.json` snippet; modes mapping to the same command collapse into one proposal.
+- **Workflow guidance**: a one-line trend summary, the recommended `eval → memory → suggest` cadence, and skill scaffolds derived from the skill candidates.
+- **Suggest, don't rewrite**: `agentops suggest` writes *review drafts* under `--output` only; it is read-only with respect to the target repo's `CLAUDE.md` / `AGENTS.md` / `README.md` and never edits them in place. Adoption stays the user's decision.
+- The assets are a **regenerable projection** of memory plus the instruction files: the same inputs yield byte-identical assets, overwritten each run (never appended). A missing or empty history exits with the same structured error (hint to run `agentops eval` first).
+
 ## Output
 
 AgentOps Harness writes local analysis artifacts to `.agentops/`:
@@ -186,11 +205,15 @@ Score: 60/100
   agentops-trace.json      # memory workflow trace
 ```
 
-Future releases will add:
+`agentops suggest` projects accumulated memory plus the current instruction files into a set of adoptable improvement assets (overwritten each run):
 
 ```text
-  suggested-claude-md.md
-  suggested-agents-md.md
+<output>/
+  suggested-claude-md.md     # CLAUDE.md: adoptable repo-rules block (additions) + trim diagnostics (subtractions) + missing-file note
+  suggested-agents-md.md     # the same, targeting AGENTS.md
+  suggested-hooks.md         # one hook proposal per recurring failure mode + settings.json snippets + workflow guidance + skill scaffolds
+  agentops-suggestions.json  # structured ImprovementAssets (for Studio / Phase 7)
+  agentops-trace.json        # suggest workflow trace
 ```
 
 | File | Purpose |
@@ -204,8 +227,10 @@ Future releases will add:
 | `agentops-memory.md` | Repository memory report: trend, failure modes, rule candidates, skill candidates |
 | `agentops-memory.json` | Structured repository memory for Phase 6 / tool integrations |
 | `skill-candidates.md` | Recurring lessons that may become reusable skills |
-| `suggested-claude-md.md` | Draft improvements for `CLAUDE.md` |
-| `suggested-agents-md.md` | Draft improvements for `AGENTS.md` |
+| `suggested-claude-md.md` | Draft improvements for `CLAUDE.md`: adoptable repo-rules block (additions) + trim diagnostics (subtractions) + missing-file note |
+| `suggested-agents-md.md` | Draft improvements for `AGENTS.md` (same shape) |
+| `suggested-hooks.md` | Hook proposals + `settings.json` snippets + workflow guidance + skill scaffolds |
+| `agentops-suggestions.json` | Structured ImprovementAssets for Studio / Phase 7 |
 
 ## Project Scope
 
@@ -224,4 +249,4 @@ The project advances deterministic-rules-first, writing a failing test before th
 
 ## Development Status
 
-AgentOps Harness is an early-stage open-source project, and interfaces may change. Repository readiness scanning, repository initialization, deterministic workflow tracing, and scope-dimension session evaluation (`agentops eval`, deterministic scoring plus an accumulating `eval-history.jsonl`) work today, along with an optional LLM intent verdict (`--intent-judge llm`, a `within_intent` / `drift` verdict per drift finding that degrades to the deterministic `needs_review` on any failure and never moves the score) and a deterministic repository-memory projection (`agentops memory`, distilling the accumulated history into a trend, failure modes, rule candidates, and skill candidates — offline, regenerable, and never moving the score); more evaluation dimensions, diagnosis, and improvement-asset generation are landing phase by phase. Issues and discussions about real AI coding workflows are welcome.
+AgentOps Harness is an early-stage open-source project, and interfaces may change. Repository readiness scanning, repository initialization, deterministic workflow tracing, and scope-dimension session evaluation (`agentops eval`, deterministic scoring plus an accumulating `eval-history.jsonl`) work today, along with an optional LLM intent verdict (`--intent-judge llm`, a `within_intent` / `drift` verdict per drift finding that degrades to the deterministic `needs_review` on any failure and never moves the score), a deterministic repository-memory projection (`agentops memory`, distilling the accumulated history into a trend, failure modes, rule candidates, and skill candidates — offline, regenerable, and never moving the score), and a deterministic improvement-asset projection (`agentops suggest`, turning memory plus the current instruction files into `CLAUDE.md` / `AGENTS.md` managed blocks plus trim diagnostics, hook proposals, and workflow guidance — read-only with respect to the target repo, offline, regenerable, and never moving the score); more evaluation dimensions, diagnosis, and real-time supervision are landing phase by phase. Issues and discussions about real AI coding workflows are welcome.

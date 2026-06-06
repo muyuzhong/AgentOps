@@ -25,7 +25,7 @@
 ## 当前状态
 
 - 当前分支：`main`
-- 当前阶段：Phase 5 仓库记忆已完成（Task 1–8）。新增只读命令 `agentops memory`，把累积的 `eval-history.jsonl` 确定性地投影为仓库记忆——分数/漂移**趋势**、反复出现的**失败模式**（各带 N/M 复现 + 热点路径 + 最近出现）、带证据的**规则候选**（复用现有 `Recommendation`）、可复用的 **skill 候选**——并覆盖写出 `agentops-memory.md`、`agentops-memory.json`、`skill-candidates.md` 与 `agentops-trace.json`。记忆是历史的可再生投影（同样历史产出字节一致的记忆、每次覆盖重写），离线、确定性、不调用 LLM、不移动任何评测分数、零新增运行时依赖。`MemoryNarrator` 接缝已就位但只有确定性身份实现（LLM 叙述者留到可选 Phase 5.5）。下一步：Phase 6 改进资产。
+- 当前阶段：Phase 6 改进资产已完成（Task 1–7）。新增只读命令 `agentops suggest`，把累积的 `eval-history.jsonl` 重新投影为仓库记忆，再只读地读取仓库当前的 `CLAUDE.md` / `AGENTS.md` / `README.md`，把记忆 + 指令文件确定性地投影为**可直接采纳的改进资产**并覆盖写出 `suggested-claude-md.md`、`suggested-agents-md.md`、`suggested-hooks.md`、`agentops-suggestions.json` 与 `agentops-trace.json`：`CLAUDE.md` / `AGENTS.md` 的 `agentops:repo-rules` 托管块（加法，各带 N/M 复现）+ 精简诊断（减法：超长、逐字重复 README）+ 缺失时「建议新建」、按失败模式映射现有命令的 hook 提案（含 `settings.json` 片段、按命令去重合并）、一句趋势摘要 + `eval → memory → suggest` 运行节奏 + skill 脚手架。资产是记忆 + 指令文件的可再生投影（同样输入产出字节一致、每次覆盖重写），对目标仓库只读（除 `--output` 外不写文件、绝不就地改写指令文件）、离线、确定性、不调用 LLM、不移动任何评测分数、零新增运行时依赖。`AssetNarrator` 接缝已就位但只有确定性身份实现（LLM 叙述者留到后续可选切片）。下一步：Phase 7 监督型循环。
 - 当前版本：`0.1.0`
 - 当前可用命令：
   - `agentops --help`
@@ -40,13 +40,15 @@
   - `agentops eval --repo <repo-path> --intent-judge llm --intent-model <id> [--intent-base-url <url>]`
   - `agentops memory --repo <repo-path>`
   - `agentops memory --repo <repo-path> --history <eval-history.jsonl> --output <output-path>`
+  - `agentops suggest --repo <repo-path>`
+  - `agentops suggest --repo <repo-path> --history <eval-history.jsonl> --output <output-path>`
 - 当前完整测试命令：
 
 ```powershell
 python -m pytest -v
 ```
 
-- 最近一次确认的测试结果：2026-06-06 执行 `python -m pytest -v`，共 `337 passed`，另有 1 个既有 `PytestCollectionWarning`（`TestResult` dataclass 名称被 pytest 尝试收集）。
+- 最近一次确认的测试结果：2026-06-07 执行 `python -m pytest -v`，共 `388 passed`，另有 1 个既有 `PytestCollectionWarning`（`TestResult` dataclass 名称被 pytest 尝试收集）。
 
 ## 已完成能力
 
@@ -261,15 +263,47 @@ python -m pytest -v
 - `run_memory` 通过同一个 `WorkflowRunner` 串联 read_history → build_memory → write_memory_artifacts，复用与 scan/eval 相同的 trace 事件/失败语义；缺失文件或零条可用记录降级为结构化 `MemoryWorkflowError`（保留 trace，附"先跑 agentops eval"指引）；默认确定性叙述者，不触网/不需 key。CLI 是 `run_memory` 的薄适配器：打印一行摘要 + 产物路径；结构化失败返回退出码 1、stderr 简短信息且无 traceback；`scan`/`init`/`check-session-log`/`eval` 行为保持不变。
 - 已完成 Task 8 文档收口与真实验证：对本仓库的真实 `eval-history.jsonl` 执行 `agentops memory`，写出三个记忆产物 + trace、退出 0，二次运行字节一致（覆盖非 append），且对目标仓库只读（仅向 `--output` 写，`.agentops` 已被忽略）。
 
+### Phase 6：Improvement Assets
+
+- 已完成 Task 1 资产核心模型：
+  - `InstructionSuggestion`
+  - `HookProposal`
+  - `ImprovementAssets`
+  - `ArtifactKind` 增加 `SUGGESTED_CLAUDE_MD` / `SUGGESTED_AGENTS_MD` / `HOOK_PROPOSALS` / `SUGGESTIONS_JSON`。
+- 均为不可变 dataclass，提供稳定 JSON 友好 `to_dict()`（tuple 转 list、None 保留、嵌套 `Recommendation` / `Finding` / `SkillCandidate` 递归序列化）；只新增三个包装模型，复用既有候选模型，不另立平行体系。
+- 已完成 Task 2 指令建议投影（加法 + 减法）：
+  - `derive_instruction_suggestions`
+  - `INSTRUCTION_LINE_BUDGET`（provisional 200）/ `REPO_RULES_BLOCK_START` / `REPO_RULES_BLOCK_END`
+- 固定先 `CLAUDE.md` 再 `AGENTS.md`；加法复用 `memory.rule_candidates`，文件缺失时前置一条 `ADD_CONSTRAINT_FILE`；`agentops:repo-rules` 托管块每条规则候选一行 bullet（无规则则为空串），marker 刻意区别于 init 的 `session-protocol`；减法仅在文件存在时做两类可辩护诊断——`instruction_over_budget`（WARNING，超 200 行）、`duplicates_readme`（INFO，逐字包含 README 首段），保守宁可沉默。输入是文本内容而非路径，纯函数、可离线测试。
+- 已完成 Task 3 hook 提案投影：
+  - `derive_hook_proposals`
+- 复用 Phase 5 复现阈值（≥2）：达标且有已知映射的失败模式才产出提案；映射到同一 `(event, command)` 的模式合并为一条（`failure_codes` 列全部贡献 code、证据合并），按 `(command, 首个 code)` 稳定排序；`settings_snippet` 是确定性渲染的 Claude Code Stop-hook `settings.json` 片段（`json.dumps(indent=2)`）；slug 由子命令 + 事件确定派生。复用现有命令（`check-session-log` / `eval`），不发明新运行时行为。
+- 已完成 Task 4 投影装配与叙述接缝：
+  - `build_improvement_assets`
+  - `AssetNarrator`（`runtime_checkable` Protocol）
+  - `DeterministicAssetNarrator`（身份实现）
+- `build_improvement_assets` 顺序组装 trend 一句话摘要、指令建议、hook 提案、透传 skill 候选、确定性 `workflow_steps`，再交给可注入叙述者；默认确定性身份实现，同样 `(memory, instructions, readme)` 产出字节一致的资产；叙述者只能改写描述字段，绝不改动结构事实（与 `IntentJudge` / `MemoryNarrator` 同构）。
+- 已完成 Task 5 改进资产写出：
+  - `ImprovementReportWriter`
+- 覆盖写出（绝不 append）`suggested-claude-md.md` / `suggested-agents-md.md`（可采纳 repo-rules 块放进围栏代码块 + 减法诊断 + 缺失提示）、`suggested-hooks.md`（hook 提案 + `settings.json` 片段 + 工作流指引 + skill 脚手架）、`agentops-suggestions.json`（镜像 `ImprovementAssets.to_dict()`，UTF-8、sort_keys、两空格缩进、尾随换行）；薄/空资产也渲染干净。沿用 `MemoryReportWriter` 约定，不在 `writers/__init__.py` 再导出。
+- 已完成 Task 6 suggest workflow runtime 与 CLI：
+  - `ImproveRunResult`
+  - `ImproveWorkflowError`
+  - `run_suggest`
+  - `agentops suggest --repo <p> [--history <jsonl>] [--output <dir>]`
+- `run_suggest` 通过同一个 `WorkflowRunner` 串联 read_history → build_memory → read_instructions → build_assets → write_improvement_artifacts，复用 Phase 5 的 `EvalHistoryReader` / `build_repo_memory` 与 scan/eval/memory 相同的 trace 事件/失败语义；`read_instructions` 只读读取 `CLAUDE.md` / `AGENTS.md` / `README.md`（缺失 → None，绝不报错、绝不修改仓库）；缺失文件或零条记录降级为结构化 `ImproveWorkflowError`（保留 trace，附"先跑 agentops eval"指引）；默认确定性 narrator，不触网/不需 key。CLI 是 `run_suggest` 的薄适配器：打印摘要 + 趋势 + 产物路径；结构化失败返回退出码 1、stderr 简短信息且无 traceback；`scan` / `init` / `check-session-log` / `eval` / `memory` 行为保持不变。
+- 已完成 Task 7 文档收口与真实验证：对本仓库执行 `agentops suggest --repo .`（基于真实 `eval-history.jsonl`），只读地读取根 `README.md`（`CLAUDE.md` / `AGENTS.md` 缺失 → 建议新建），写出四个建议产物 + trace、退出 0，二次运行四个资产字节一致（覆盖非 append），且 tracked 工作区保持干净、目标指令文件零改动；缺历史时给出结构化错误。
+
 ## 当前文件边界
 
 | 路径 | 职责 |
 | --- | --- |
-| `agentops/cli.py` | CLI 入口和 `scan` / `init` / `check-session-log` / `eval` / `memory` 子命令薄适配器 |
+| `agentops/cli.py` | CLI 入口和 `scan` / `init` / `check-session-log` / `eval` / `memory` / `suggest` 子命令薄适配器 |
 | `agentops/core/repo.py` | 仓库画像模型 |
 | `agentops/core/evaluation.py` | Finding 和 ReadinessReport |
 | `agentops/core/eval.py` | 会话评测结果模型和 intent verdict 模型 |
 | `agentops/core/memory.py` | 仓库记忆模型：ScoreTrend / FailureMode / SkillCandidate / RepoMemory |
+| `agentops/core/asset.py` | 改进资产模型：InstructionSuggestion / HookProposal / ImprovementAssets |
 | `agentops/core/recommendation.py` | 建议类型和建议模型 |
 | `agentops/core/artifact.py` | 输出产物模型 |
 | `agentops/core/evidence.py` | diff、git、CI、shell 和 test 公共证据模型 |
@@ -295,14 +329,20 @@ python -m pytest -v
 | `agentops/memory/candidates.py` | 从反复模式派生规则候选与 skill 候选（带 N/M 证据） |
 | `agentops/memory/narrator.py` | MemoryNarrator 接缝 + 确定性身份实现 DeterministicMemoryNarrator |
 | `agentops/memory/aggregate.py` | 把历史确定性装配为 RepoMemory（build_repo_memory） |
+| `agentops/improve/instructions.py` | 规则候选 → 指令文件加法托管块 + 确定性减法诊断（行数 / README 重复） |
+| `agentops/improve/hooks.py` | 反复失败模式 → hook 提案 + settings.json 片段（按命令去重合并） |
+| `agentops/improve/narrator.py` | AssetNarrator 接缝 + 确定性身份实现 DeterministicAssetNarrator |
+| `agentops/improve/aggregate.py` | 把记忆 + 指令文件确定性装配为 ImprovementAssets（build_improvement_assets） |
 | `agentops/hooks/session_log.py` | 会话日志新鲜度检查（stop-hook 核心） |
 | `agentops/writers/report.py` | Markdown 和 JSON readiness 产物写出 |
 | `agentops/writers/eval_report.py` | eval 报告、评分和 append-only 历史产物写出 |
 | `agentops/writers/memory_report.py` | 记忆报告/JSON/skill 候选产物写出（覆盖写，绝不 append） |
+| `agentops/writers/improvement_report.py` | 改进资产产物写出：两份指令建议 + hook 提案 + suggestions JSON（覆盖写） |
 | `agentops/writers/trace.py` | JSON workflow trace 产物写出 |
 | `agentops/runtime/scan.py` | scan workflow 编排、trace 写出和结构化失败 |
 | `agentops/runtime/eval.py` | session-eval workflow 编排、产物/trace 写出和结构化失败 |
 | `agentops/runtime/memory.py` | 记忆投影 workflow 编排、产物/trace 写出和结构化失败 |
+| `agentops/runtime/improve.py` | suggest workflow 编排（读历史→记忆→读指令→投影资产→写产物）和结构化失败 |
 | `agentops/runtime/workflow.py` | 同步确定性 workflow runner |
 | `tests/test_cli.py` | CLI 行为测试 |
 | `tests/test_core_models.py` | 核心模型测试 |
@@ -332,6 +372,12 @@ python -m pytest -v
 | `tests/test_memory_aggregate.py` | Phase 5 投影装配、确定性与叙述接缝测试 |
 | `tests/test_memory_report_writer.py` | Phase 5 记忆 md/json/skill 候选写出与覆盖测试 |
 | `tests/test_memory_runtime.py` | Phase 5 记忆 workflow 集成与结构化失败测试 |
+| `tests/test_asset_models.py` | Phase 6 资产核心模型序列化与不变量测试 |
+| `tests/test_improve_instructions.py` | Phase 6 指令建议投影（加法/减法/缺失）测试 |
+| `tests/test_improve_hooks.py` | Phase 6 hook 提案映射、阈值门控与去重测试 |
+| `tests/test_improve_aggregate.py` | Phase 6 资产装配、确定性与叙述接缝测试 |
+| `tests/test_improvement_report_writer.py` | Phase 6 改进资产产物写出与覆盖测试 |
+| `tests/test_improve_runtime.py` | Phase 6 suggest workflow 集成、只读与结构化失败测试 |
 | `tests/test_repo_scanner.py` | 仓库扫描器测试 |
 | `tests/test_readiness_evaluator.py` | readiness 评分规则测试 |
 | `tests/test_report_writer.py` | readiness 产物写出测试 |
@@ -339,13 +385,13 @@ python -m pytest -v
 
 ## 下一步
 
-Phase 5 仓库记忆已全部完成（Task 1–8）。下一步：进入 Phase 6 改进资产——把 Phase 5 产出的规则候选 / skill 候选 / 失败模式落成可直接采纳的 `CLAUDE.md` / `AGENTS.md` 文本、hook 提案和工作流指引。先为 Phase 6 写一份新的纵向切片实施计划，再开始编码：
+Phase 6 改进资产已全部完成（Task 1–7）。下一步：进入 Phase 7 监督型循环——在已闭合的 observe → evaluate → diagnose → improve 链路上加入 watcher / 实时旁路监督，观察 AI coding 过程、发现风险并给出干预建议，并在累积记忆上做趋势分析。先为 Phase 7 写一份新的纵向切片实施计划，再开始编码：
 
 ```text
 docs/superpowers/plans/
 ```
 
-两个问题留待依累积记忆再决定：一是是否让 `drift` 趋势反过来校准确定性分数（Phase 5 只读地报告趋势，从不移动分数）；二是是否用可选 LLM 叙述者填充已就位的 `MemoryNarrator` 接缝（Phase 5.5，只富化描述字段、不改结构事实）。
+两个问题继续留待依累积记忆再决定：一是是否让 `drift` 趋势反过来校准确定性分数（至今只读地报告趋势，从不移动分数）；二是是否用可选 LLM 叙述者填充已就位的 `MemoryNarrator` / `AssetNarrator` 接缝（只富化描述字段、不改结构事实）。
 
 实施前依次阅读 `agent.md`、本文档和 `docs/development-roadmap.md`，确认下一阶段边界；每次只完成一个 Task，先写失败测试再写最小实现。
 
@@ -374,17 +420,20 @@ docs/superpowers/plans/
 - Phase 4.5 LLM 接缝 provider 无关：`LLMClient` 是文本进、文本出的最薄协议，结构化输出（JSON 解析/校验）是 judge 职责，故"响应不可解析"退化为一次安全降级而非崩溃。唯一适配器 `OpenAICompatibleClient` 仅用标准库 urllib，模型 id 不在库代码硬编码。`LLMIntentJudge` 任何失败（缺 key/缺 model/网络/解析/取值非法/覆盖不全）一律降级回确定性 `needs_review`，`judge()` 绝不因模型侧问题抛异常。裁决**不移动分数**，只丰富报告并向历史行追加 `verdict_summary`。
 - Phase 5 记忆是 `eval-history.jsonl` 的**确定性投影，不是新存储**：每次从历史重新生成并覆盖写出，历史仍是唯一真相来源，不引入第二个 append-only 日志；同样历史产出字节一致的记忆。所有蒸馏确定性（计数、走向、按稳定 code 聚类、按频次排序）。`MemoryNarrator` 接缝先就位、只给确定性身份实现（与 Phase 4 先就位 `IntentJudge` 同构），LLM 叙述者留到可选 Phase 5.5 且只能改写描述字段、绝不改动结构事实。记忆**只读取**分数算趋势，**从不移动分数**；`agentops memory` 是独立命令，`agentops eval` 不自动刷新记忆，二者解耦。
 - Phase 5 规则候选**复用现有 `Recommendation`/`RecommendationKind`**，不新增模型；规则/skill 候选都是带 N/M 证据的**候选数据**，落成最终 `CLAUDE.md`/`AGENTS.md` 文本、hook、workflow 资产是 Phase 6。复现阈值（≥2 次评测）与 scope 扣分权重一样是 provisional，待累积数据校准。
+- Phase 6 改进资产是 `eval-history.jsonl` + 仓库现有指令文件的**确定性投影，不是新存储**：每次重新投影并覆盖写出，记忆仍是单一蒸馏源、历史仍是单一原始源，不引入第二个持久化存储。`agentops suggest` **建议而非改写**——只在 `--output` 下写评审草案，对目标仓库的 `CLAUDE.md` / `AGENTS.md` / `README.md` 完全只读、绝不就地修改；可选的就地 `--write`（复用 `initializers/repo.py` 托管块机制）显式推迟。repo-rules 托管块用 `agentops:repo-rules` marker，刻意区别于 init 的 `agentops:session-protocol`，两块在同一文件可共存。
+- Phase 6 只做确定性投影：加法复用 Phase 5 规则候选，减法只做可辩护的结构诊断（行预算、逐字 README 重复，宁可沉默不误报），hook 按失败模式 code 映射现有命令（`check-session-log` / `eval`，不发明新运行时行为），复用 Phase 5 复现阈值门控并按 `(event, command)` 去重合并。`AssetNarrator` 接缝先就位、只给确定性身份实现（与 `IntentJudge` / `MemoryNarrator` 同构），LLM 叙述者——语义减法判断与散文润色的自然归宿——留到后续可选切片，且只能改写描述字段、绝不改动结构事实（target / 规则 kind / hook 命令 / 计数 / 路径）。资产**从不**重算或写回任何评测分数；`INSTRUCTION_LINE_BUDGET=200` 与复现阈值一样是 provisional，待累积数据校准。`agentops suggest` 是独立命令，`eval` / `memory` 不自动触发它。
 
 ## 已知限制和风险
 
-- session-eval workflow 已接入并复用 scan 的 trace 事件/失败语义；Phase 4.5 已在 `IntentJudge` 接缝后填充可选 `LLMIntentJudge`，Phase 5 已落地确定性记忆投影（`agentops memory`），但仍没有 watcher / 实时监督。
+- session-eval workflow 已接入并复用 scan 的 trace 事件/失败语义；Phase 4.5 已在 `IntentJudge` 接缝后填充可选 `LLMIntentJudge`，Phase 5 已落地确定性记忆投影（`agentops memory`），Phase 6 已落地确定性改进资产投影（`agentops suggest`），但仍没有 watcher / 实时监督（Phase 7）。
 - Phase 5 记忆的复现阈值（≥2 次评测才产出规则/skill 候选）与失败模式聚类、热点路径 top 10 上限都是 provisional，缺乏真实数据支撑，后续需用累积的 eval 历史校准（与 scope 权重同样的纪律）。
 - `MemoryNarrator` 接缝目前只有确定性身份实现：失败模式 summary / skill rationale 都是模板文案，尚无自然语言富化（留待可选 Phase 5.5 的 LLM 叙述者）。
+- `AssetNarrator` 接缝同样只有确定性身份实现：托管块 bullet、hook rationale、趋势摘要、减法 `Finding.message` 都是模板文案，尚无自然语言富化与语义减法判断（哪些现有指令行是教程膨胀 vs 项目约束），留待后续可选 LLM 叙述者。`INSTRUCTION_LINE_BUDGET=200` 行预算与 hook 复现阈值都是 provisional，缺乏真实数据支撑，待累积校准。
 - 是否让累积的 `drift` 趋势反过来校准确定性分数仍未决：Phase 5 只读地报告趋势，从不移动分数；待趋势数据 justify 后再定。
 - `agentops eval` 默认 `--diff-base HEAD` 只对账工作区相对 HEAD 的 tracked 改动，不含 untracked 文件；需要纳入未跟踪文件或历史区间时需显式传 `--diff-base`。
 - session-eval 的 scope-discipline 扣分权重（undeclared 15 / declared_not_changed 10 / cross_module 10）与 readiness 权重一样是 provisional，缺乏真实数据支撑，后续需用累积的 eval 历史校准。
 - `ReadinessEvaluator` 当前信任内部 `RepoProfile` 已由 scanner 规范化；未来开放 SDK 前需要补充输入契约校验。
-- README 中列出的诊断和改进资产生成能力仍属于开发中能力。
+- README 中列出的问题诊断能力仍属于开发中能力（改进资产生成已随 Phase 6 落地为 `agentops suggest`）。
 - 项目尚未确定正式 License。
 - 当前 readiness 评分是文件存在性检查，不是质量检查（有 `CLAUDE.md` 不等于 `CLAUDE.md` 有用）。权重（15/25/25/15/10/10）缺乏依据，需要在后续版本中升级为质量评估。
 - `WorkflowRunner` 已同时承载 scan 与 eval 两条流水线；若后续 LLM-in-the-loop 需要非确定性编排，可能需要扩展或返工。
@@ -393,6 +442,12 @@ docs/superpowers/plans/
 
 | 日期 | 提交 | 内容 |
 | --- | --- | --- |
+| 2026-06-07 | `0dd3887` | 暴露 `agentops suggest` 改进资产命令 |
+| 2026-06-07 | `dbffbc6` | 写出建议指令、hook 与 suggestions 产物 |
+| 2026-06-07 | `4d1a7dd` | 在叙述接缝后装配改进资产投影 |
+| 2026-06-07 | `df80b37` | 从反复失败模式产出 hook 提案 |
+| 2026-06-07 | `eb90a83` | 把规则候选投影为指令文件建议 |
+| 2026-06-07 | `a2eeea3` | 新增改进资产核心模型 |
 | 2026-06-06 | `3d3f01d` | 暴露 `agentops memory` 仓库记忆命令 |
 | 2026-06-06 | `7624f17` | 写出仓库记忆报告、JSON 与 skill 候选 |
 | 2026-06-06 | `9993d0f` | 在叙述接缝后装配仓库记忆投影 |

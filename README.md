@@ -33,13 +33,14 @@ AgentOps 的评估核心不是“复述 Agent 做了什么”，而是“对账 
 - **会话评测（scope 维度）**：对账最新一条任务报告的声明与 git 真相，输出确定性的 scope-discipline 评分、带证据的发现和可执行建议，并把每次评测追加进 `eval-history.jsonl`。
 - **意图裁决（可选 LLM）**：`--intent-judge llm` 对每条确定性漂移发现逐条裁决“在意图内 / 真正越界”（`within_intent` / `drift`）；默认仍是离线、确定性的 `needs_review`，任何失败都自动降级。裁决只丰富报告，不改变确定性分数。
 - **仓库记忆（确定性投影）**：`agentops memory` 把累积的 `eval-history.jsonl` 蒸馏为仓库记忆——分数/漂移趋势、反复出现的失败模式（各带「N/M 次评测复现」证据）、带证据的规则候选和 skill 候选。记忆是历史的可再生投影：同样历史产出字节一致的记忆，离线、确定性，不移动任何评测分数。
+- **改进资产（确定性投影）**：`agentops suggest` 把仓库记忆 + 现有指令文件投影为可直接采纳的改进资产——`CLAUDE.md` / `AGENTS.md` 的 `agentops:repo-rules` 托管块（加法）与精简诊断（减法：超长、重复 README）、按反复失败模式映射现有命令的 hook 提案（含 `settings.json` 片段），以及工作流指引与 skill 脚手架。对目标仓库只读（绝不改写指令文件），离线、可再生、不移动分数。
 - **工作流追踪**：记录确定性的扫描和评测步骤及失败信息，便于检查执行过程。
 
 开发中：
 
 - **更多评测维度**：在 scope/boundary 之外，增加上下文质量、验证充分性等维度。
 - **问题诊断**：识别上下文缺失、修改越界、验证不足、重复失败和任务膨胀。
-- **仓库级改进建议**：给出 `CLAUDE.md`、`AGENTS.md`、skill、hook、验证命令和上下文管理建议。
+- **实时旁路监督**：观察 AI coding 过程、发现风险并给出干预建议（Phase 7）。
 
 ## 安装
 
@@ -128,6 +129,24 @@ agentops memory --repo <repo-path> --history <eval-history.jsonl> --output <outp
 - 记忆只**读取**评测分数来计算趋势，从不重算或写回任何分数；是否让漂移趋势校准分数留待后续依累积数据再定。
 - 还没有跑过任何评测（历史缺失或为空）时，命令以结构化错误退出（退出码 1，提示先跑 `agentops eval`，无 traceback）。
 
+### 生成改进资产
+
+`agentops suggest` 把累积的 `eval-history.jsonl` 重新投影为仓库记忆，再只读地读取仓库当前的 `CLAUDE.md` / `AGENTS.md` / `README.md`，把记忆 + 指令文件确定性地投影为**可直接采纳的改进资产**并覆盖写出。它对目标仓库只读，只向 `--output` 目录写入；离线、确定性，不调用任何模型、不需 API key、零新增依赖。
+
+```shell
+# 把累积记忆投影为可采纳的改进资产
+agentops suggest --repo <repo-path>
+
+# --history 默认 <repo>/.agentops/eval-history.jsonl；--output 默认 .agentops
+agentops suggest --repo <repo-path> --history <eval-history.jsonl> --output <output-path>
+```
+
+- **`CLAUDE.md` / `AGENTS.md` 建议**：一段可直接粘贴的 `agentops:repo-rules` 托管块（每条反复规则一行，各带 N/M 复现证据，加法），加上确定性精简诊断（减法：超出 ~200 行预算、逐字重复 README），文件缺失时再附「建议新建」。这套 `repo-rules` marker 刻意区别于 `init` 的 `session-protocol` marker，可在同一文件中共存。
+- **hook 提案**：为每个达到复现阈值的失败模式给出一条 Claude Code hook（事件 + 现成的 `agentops` 命令）和可复制的 `settings.json` 片段；映射到同一命令的模式会合并为一条。
+- **工作流指引**：一句趋势摘要 + 推荐的 `eval → memory → suggest` 运行节奏 + 从 skill 候选派生的 skill 脚手架。
+- **建议而非改写**：`agentops suggest` 只在 `--output` 下写**评审草案**，对目标仓库的 `CLAUDE.md` / `AGENTS.md` / `README.md` 完全只读，从不就地修改；是否采纳由用户决定。
+- 资产是记忆 + 指令文件的**可再生投影**：同样输入产出字节一致的资产，每次运行覆盖重写（绝不 append）。历史缺失或为空时同样以结构化错误退出（提示先跑 `agentops eval`）。
+
 ## 输出示例
 
 AgentOps Harness 会将本地分析结果写入 `.agentops/`：
@@ -185,11 +204,15 @@ Score: 60/100
   agentops-trace.json      # 记忆 workflow trace
 ```
 
-后续版本还会逐步增加：
+`agentops suggest` 把累积记忆 + 现有指令文件投影为一组可采纳的改进资产（覆盖写出）：
 
 ```text
-  suggested-claude-md.md
-  suggested-agents-md.md
+<output>/
+  suggested-claude-md.md     # CLAUDE.md 的可采纳 repo-rules 块（加法）+ 精简诊断（减法）+ 缺失提示
+  suggested-agents-md.md     # 同形，针对 AGENTS.md
+  suggested-hooks.md         # 每个反复失败模式一条 hook 提案 + settings.json 片段 + 工作流指引 + skill 脚手架
+  agentops-suggestions.json  # 结构化 ImprovementAssets（供 Studio / Phase 7 消费）
+  agentops-trace.json        # suggest workflow trace
 ```
 
 | 文件 | 用途 |
@@ -203,8 +226,10 @@ Score: 60/100
 | `agentops-memory.md` | 仓库记忆报告：趋势、失败模式、规则候选、skill 候选 |
 | `agentops-memory.json` | 结构化仓库记忆，供 Phase 6 / 工具链消费 |
 | `skill-candidates.md` | 可以沉淀为 skill 的重复经验 |
-| `suggested-claude-md.md` | `CLAUDE.md` 改进草案 |
-| `suggested-agents-md.md` | `AGENTS.md` 改进草案 |
+| `suggested-claude-md.md` | `CLAUDE.md` 改进草案：可采纳 repo-rules 块（加法）+ 精简诊断（减法）+ 缺失提示 |
+| `suggested-agents-md.md` | `AGENTS.md` 改进草案（同形） |
+| `suggested-hooks.md` | hook 提案 + `settings.json` 片段 + 工作流指引 + skill 脚手架 |
+| `agentops-suggestions.json` | 结构化 ImprovementAssets，供 Studio / Phase 7 消费 |
 
 ## 项目边界
 
@@ -223,4 +248,4 @@ python -m pytest
 
 ## 开发状态
 
-项目仍在早期开发中，接口可能调整。当前已经打通仓库 readiness 扫描、仓库初始化、确定性 workflow 追踪，以及 scope 维度的会话评测（`agentops eval`，确定性评分 + `eval-history.jsonl` 数据累积），并支持可选的 LLM 意图裁决（`--intent-judge llm`，对每条漂移发现给出 `within_intent` / `drift`，任何失败都降级为确定性 `needs_review`，且不改变分数），以及仓库记忆的确定性投影（`agentops memory`，把累积历史蒸馏为趋势、失败模式、规则候选和 skill 候选，离线、可再生、不移动分数）；更多评测维度、问题诊断和改进资产生成正在按阶段推进。欢迎提交 Issue 讨论真实 AI coding 工作流中的使用场景和需求。
+项目仍在早期开发中，接口可能调整。当前已经打通仓库 readiness 扫描、仓库初始化、确定性 workflow 追踪，以及 scope 维度的会话评测（`agentops eval`，确定性评分 + `eval-history.jsonl` 数据累积），并支持可选的 LLM 意图裁决（`--intent-judge llm`，对每条漂移发现给出 `within_intent` / `drift`，任何失败都降级为确定性 `needs_review`，且不改变分数），仓库记忆的确定性投影（`agentops memory`，把累积历史蒸馏为趋势、失败模式、规则候选和 skill 候选，离线、可再生、不移动分数），以及把记忆 + 现有指令文件投影为可采纳改进资产的确定性生成（`agentops suggest`，产出 `CLAUDE.md` / `AGENTS.md` 托管块 + 精简诊断、hook 提案和工作流指引，对目标仓库只读、离线、可再生、不移动分数）；更多评测维度、问题诊断和实时旁路监督正在按阶段推进。欢迎提交 Issue 讨论真实 AI coding 工作流中的使用场景和需求。

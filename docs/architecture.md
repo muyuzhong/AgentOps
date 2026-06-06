@@ -66,6 +66,7 @@ LLM enriches diagnosis and recommendations.
 agentops scan --repo <repo-path>
 agentops eval --repo <repo-path> [--session <session.md>] [--diff-base <ref>] [--output <dir>] [--intent-judge {deterministic,llm}] [--intent-model <id>] [--intent-base-url <url>]
 agentops memory --repo <repo-path> [--history <eval-history.jsonl>] [--output <dir>]
+agentops suggest --repo <repo-path> [--history <eval-history.jsonl>] [--output <dir>]
 ```
 
 后续可以增加 SDK 和 Studio。
@@ -139,6 +140,33 @@ agentops memory --repo <path>
 - **裁决不移动分数**：记忆只**读取** `result.score` 计算趋势、读取 `verdict_summary` 报告 drift 走向，从不重算、扣减或写回任何评测分数。是否让 drift 趋势校准分数仍留待累积数据justify。
 - **只读、离线、零新增依赖**：`agentops memory` 对目标仓库只读（仅向 `--output` 写产物），不调用任何 LLM、不触网、不需 key；缺失/空历史以结构化 `MemoryWorkflowError` 退出（退出码 1，提示先跑 `agentops eval`，无 traceback）。`agentops eval` 不会自动刷新记忆，二者解耦。
 
+### 改进资产的确定性投影（Phase 6）
+
+记忆蒸馏出的规则候选 / skill 候选 / 失败模式是**候选数据**，Phase 6 把它们落成**可直接采纳的改进资产**。`agentops suggest` 增加第二条**只读**流水线，复用 Phase 5 的前两步（读历史 + 装配记忆）、再只读地读取仓库现有指令文件，与 scan/eval/memory 共用同一个 `WorkflowRunner`，不改动 eval/memory 流水线分毫：
+
+```text
+agentops suggest --repo <path>
+  read_history             eval-history.jsonl  → tuple[HistoryRecord, ...]   （复用 Phase 5 读取器）
+  → build_repo_memory      （复用 Phase 5 确定性投影 → RepoMemory）
+  → read_instructions      只读 CLAUDE.md / AGENTS.md / README.md → dict[str, str | None]
+  → build_improvement_assets   （确定性投影；叙述者默认身份实现）
+       ├─ derive_instruction_suggestions  规则候选 → 可采纳 repo-rules 块（加法）；行数 + README 重复 → 精简诊断（减法）
+       ├─ derive_hook_proposals           反复失败模式 → Stop-hook 提案 + settings.json 片段（按命令去重）
+       ├─ (trend + skill 候选)            trend_summary + 推荐节奏 + skill 脚手架
+       └─ AssetNarrator.narrate           （确定性默认：原样返回投影）
+  → write_improvement_artifacts  suggested-claude-md.md、suggested-agents-md.md、suggested-hooks.md、
+                                  agentops-suggestions.json、agentops-trace.json
+```
+
+设计边界（与 Phase 5 同纪律）：
+
+- **建议而非改写**：`agentops suggest` 只在 `--output` 下写**评审草案**，对目标仓库的 `CLAUDE.md` / `AGENTS.md` / `README.md` 完全只读、绝不就地修改；草案里是一段可直接粘贴的 `agentops:repo-rules` 托管块，采纳与否由用户决定。可选的就地 `--write`（复用 `initializers/repo.py` 托管块机制）显式推迟。
+- **加法 + 减法**：加法复用规则候选渲染托管块（每条一行 bullet，各带 N/M 复现）；减法只做两类可辩护的确定性结构诊断——超出 ~200 行预算、逐字重复 README——绝不做语法/风格改写或 Markdown AST，宁可沉默不误报。`agentops:repo-rules` marker 刻意区别于 init 的 `agentops:session-protocol`，两块在同一文件可共存。
+- **hook 复用现有命令**：每个达到复现阈值的失败模式映射到一个现有命令（`check-session-log` / `eval`）和 Stop 事件，渲染可粘贴的 `settings.json` 片段；映射到同一 `(event, command)` 的模式合并为一条提案。Phase 6 只提议接线，不发明新运行时行为。
+- **确定性投影，接缝先就位**：所有投影确定性（复用记忆候选、code→hook 映射、计数、子串匹配 README）。`AssetNarrator` 接缝已就位但本阶段只有确定性身份实现（与 `IntentJudge` / `MemoryNarrator` 同构）；可选 LLM 叙述者——语义减法判断与散文润色的自然归宿——留到后续切片，且**只能改写描述字段**（managed_block 散文 / rationale / trend_summary / Finding.message），绝不改动结构事实（target / 规则 kind / hook 命令 / 计数 / 证据路径）。
+- **资产是投影，不是新存储**：资产每次从 `eval-history.jsonl` + 现有指令文件重新生成并覆盖写出，记忆仍是单一蒸馏源、历史仍是单一原始源；同样输入产出字节一致的资产。资产**从不**重算或写回任何评测分数。
+- **只读、离线、零新增依赖**：`agentops suggest` 对目标仓库只读（仅向 `--output` 写产物），不调用任何 LLM、不触网、不需 key；缺失/空历史以结构化 `ImproveWorkflowError` 退出（退出码 1，提示先跑 `agentops eval`，无 traceback）。
+
 ### 证据分层
 
 | 证据类型 | 来源 | agent 能否伪造 | 用途 |
@@ -164,9 +192,10 @@ agentops memory --repo <path>
 | `judges/` | 意图裁决可注入接口、确定性默认判官与可选 LLM 判官（唯一 LLM 接缝） | Phase 4 确定性默认判官；Phase 4.5 增加可选 `LLMIntentJudge`（任何失败降级到确定性） |
 | `llm/` | provider 无关的 `LLMClient` 接缝与唯一的 OpenAI 兼容适配器（仅标准库） | Phase 4.5 已实现；零新增依赖 |
 | `memory/` | 把累积 eval 历史确定性地投影为趋势/失败模式/规则候选/skill 候选，并在叙述接缝后装配 | Phase 5 已实现；确定性默认、不移动分数、零新增依赖 |
+| `improve/` | 把记忆 + 现有指令文件确定性地投影为可采纳的改进资产（指令建议 / hook 提案 / 工作流指引），并在叙述接缝后装配 | Phase 6 已实现；只读、确定性默认、不移动分数、零新增依赖 |
 | `recommenders/` | 诊断 Finding 并输出优化指引,不直接生成最终文本 | 后续扩展 |
-| `writers/` | 输出 Markdown、JSON 和建议草案 | Phase 2 readiness 与 workflow trace 产物；Phase 4 eval 报告/评分/历史产物；Phase 5 记忆报告/JSON/skill 候选产物 |
-| `runtime/` | 串联各模块，维护 workflow 状态和事件 | Phase 2 scan workflow 编排、错误隔离和 trace；Phase 4 session-eval workflow；Phase 5 记忆投影 workflow |
+| `writers/` | 输出 Markdown、JSON 和建议草案 | Phase 2 readiness 与 workflow trace 产物；Phase 4 eval 报告/评分/历史产物；Phase 5 记忆报告/JSON/skill 候选产物；Phase 6 改进资产产物（建议指令 / hook 提案 / suggestions JSON） |
+| `runtime/` | 串联各模块，维护 workflow 状态和事件 | Phase 2 scan workflow 编排、错误隔离和 trace；Phase 4 session-eval workflow；Phase 5 记忆投影 workflow；Phase 6 suggest workflow |
 
 ## 核心数据模型
 
@@ -188,6 +217,7 @@ agentops memory --repo <path>
 | `EvalResult` / `IntentVerdict` | 保存单次会话评测结果与意图裁决（intent_alignment 的 LLM 接缝载体） |
 | `HistoryRecord` | 保存 `eval-history.jsonl` 一行经解析后的结构化记录（容错、有界） |
 | `ScoreTrend` / `FailureMode` / `SkillCandidate` / `RepoMemory` | 保存 eval 历史的确定性记忆投影：趋势、失败模式、skill 候选与聚合记忆 |
+| `InstructionSuggestion` / `HookProposal` / `ImprovementAssets` | 保存记忆 + 指令文件的确定性改进资产投影：指令建议（加法 + 减法）、hook 提案与聚合资产 |
 
 后续按真实需求增加：
 
@@ -229,7 +259,7 @@ agentops scan --repo <repo-path>
 
 ## 建议引擎设计
 
-建议引擎的核心原则:AgentOps 负责诊断,不负责执行改写。
+建议引擎的核心原则:AgentOps 负责诊断,不负责执行改写。Phase 6 已把这一原则落成只读命令 `agentops suggest`——它把记忆 + 现有指令文件投影为可采纳的改进资产（草案），但绝不就地改写目标仓库的任何文件,采纳与否由用户决定。
 
 ### CLAUDE.md 优化:加法与减法
 
@@ -238,7 +268,7 @@ agentops scan --repo <repo-path>
 - **加法**:补充缺失的约束、验证命令、边界说明。
 - **减法**:移除教程性内容、冗余说明、应该放在 README 里的项目介绍。目标是保持在 200 行以内。
 
-建议引擎输出的是诊断结果（"缺什么""多什么""哪些该精简"）,不是最终文本。
+建议引擎输出的是诊断结果（"缺什么""多什么""哪些该精简"）,不是最终文本。Phase 6 的 `agentops suggest` 落地了其中可确定性判定的部分:加法渲染可粘贴的 `agentops:repo-rules` 托管块（每条反复规则一行、各带 N/M 复现）,减法给出"超出 ~200 行预算""逐字重复 README"两类可辩护诊断;需要语义判断的减法（哪些行是教程膨胀 vs 项目约束）留给后续可选 LLM 叙述者,不做通用 linter / Markdown AST。
 
 ### Skill 渐进式披露
 
@@ -256,6 +286,7 @@ agentops scan --repo <repo-path>
 
 - Phase 4 的 eval 本身就产出历史数据。
 - Phase 5 的记忆系统（`agentops memory`）从这些历史数据中读取并确定性地投影出趋势、失败模式、规则候选和 skill 候选，而不是从零开始。
+- Phase 6 的建议引擎（`agentops suggest`）再把这些记忆候选 + 现有指令文件投影为可直接采纳的改进资产，闭合 observe → evaluate → diagnose → improve 链路的最后一环。
 - 用户从 Phase 4 开始就能看到"这个仓库的问题在恶化还是在改善"的趋势。
 
 ## 架构约束

@@ -52,7 +52,7 @@ flowchart LR
 | Phase 4 | 评估单次 AI coding 过程 | `agentops eval`、scope 维度对账评测、`eval-history.jsonl` 数据累积 | 已完成 |
 | Phase 4.5 | 在意图接缝后填充可选 LLM 判官 | `agentops eval --intent-judge llm`，逐条 `within_intent`/`drift` 裁决，任何失败降级到确定性 | 已完成 |
 | Phase 5 | 沉淀仓库级经验 | `agentops memory`、历史评测/失败模式/规则候选/skill 候选的确定性投影 | 已完成 |
-| Phase 6 | 生成改进资产 | `CLAUDE.md`、`AGENTS.md`、hook 和流程建议 | 待规划 |
+| Phase 6 | 生成改进资产 | `agentops suggest`、`CLAUDE.md` / `AGENTS.md` 托管块 + 精简诊断、hook 提案、工作流指引 | 已完成 |
 | Phase 7 | 加入实时监督 | Watcher、监督型 loop、趋势分析 | 待规划 |
 
 ## 当前执行计划
@@ -73,8 +73,9 @@ docs/superpowers/plans/
 6. `2026-06-03-phase-4-session-eval.md`：已完成。
 7. `2026-06-05-phase-4.5-llm-intent-judge.md`：已完成。
 8. `2026-06-06-phase-5-repository-memory.md`：已完成。
+9. `2026-06-07-phase-6-improvement-assets.md`：已完成。
 
-下一步：进入 Phase 6 改进资产——把 Phase 5 产出的规则候选 / skill 候选 / 失败模式落成可直接采纳的 `CLAUDE.md` / `AGENTS.md` 文本、hook 提案和工作流指引。两个问题留待依累积记忆再定：是否让 `drift` 趋势反过来校准确定性分数（Phase 5 只读地报告趋势，不移动分数）；是否用可选 LLM 叙述者填充已就位的 `MemoryNarrator` 接缝（Phase 5.5，只富化描述、不改结构事实）。
+下一步：进入 Phase 7 监督型循环——在已经闭合的 observe → evaluate → diagnose → improve 链路上，加入 watcher / 实时旁路监督，观察 AI coding 过程、发现风险并给出干预建议，并在累积记忆上做趋势分析。两个问题继续留待依累积记忆再定：是否让 `drift` 趋势反过来校准确定性分数（至今只读地报告趋势，从不移动分数）；是否用可选 LLM 叙述者填充已就位的 `MemoryNarrator` / `AssetNarrator` 接缝（只富化描述字段、绝不改动结构事实）。
 
 Phase 3 完成后,进入 Phase 3.5 纵向探针:用现有的 `TaskReport` + `DiffSummary`,实现一个维度的会话评估（scope drift）,纯确定性规则,标出"这里该插 LLM"的位置。探针同时验证两个假设：确定性规则在会话质量上能走多远；"agent 声明 vs diff 真相"对账机制是否跑得通。探针完成后,基于答案规划 Phase 4 架构。
 

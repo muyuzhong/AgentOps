@@ -222,17 +222,17 @@ agentops_harness/
 
 ## 当前下一步
 
-Phase 5 仓库记忆已完成：新增只读命令 `agentops memory`，把累积的 `eval-history.jsonl` 确定性地投影为仓库记忆。`agentops memory --repo <path> [--history <jsonl>] [--output <dir>]` 逐行读历史（容忍空行/坏行，以及 4.5 前缺 `verdict_summary` 的旧行），蒸馏出四样东西——分数/漂移**趋势**、反复出现的**失败模式**（各带 N/M 复现、热点路径、最近出现）、带证据的**规则候选**（复用现有 `Recommendation`）、可复用的 **skill 候选**——并覆盖写出 `agentops-memory.md`、`agentops-memory.json`、`skill-candidates.md` 与 `agentops-trace.json`。记忆是历史的可再生投影：同样历史产出字节一致的记忆，每次覆盖重写，绝不 append。`python -m pytest` 共 337 passed。
+Phase 6 改进资产已完成：新增只读命令 `agentops suggest`，把累积的 `eval-history.jsonl` 重新投影为仓库记忆，再只读地读取仓库当前的 `CLAUDE.md` / `AGENTS.md` / `README.md`，把记忆 + 指令文件确定性地投影为**可直接采纳的改进资产**并覆盖写出。`agentops suggest --repo <path> [--history <jsonl>] [--output <dir>]` 产出五样东西——`CLAUDE.md` / `AGENTS.md` 的 `agentops:repo-rules` 托管块（加法，每条反复规则一行、各带 N/M 复现）+ 精简诊断（减法：超出 ~200 行预算、逐字重复 README）+ 文件缺失时的「建议新建」、为每个达到复现阈值的失败模式给出的 Claude Code hook 提案（事件 + 现成 `agentops` 命令 + 可粘贴 `settings.json` 片段，按命令去重合并）、一句趋势摘要 + `eval → memory → suggest` 运行节奏 + skill 脚手架——写出 `suggested-claude-md.md`、`suggested-agents-md.md`、`suggested-hooks.md`、`agentops-suggestions.json` 与 `agentops-trace.json`。资产是记忆 + 指令文件的可再生投影：同样输入产出字节一致的资产，每次覆盖重写，绝不 append。`python -m pytest` 共 388 passed。
 
-Phase 5 的边界严格：全部蒸馏都是确定性的（计数、走向、按稳定 code 聚类、按频次排序）；记忆**从不**重算或写回任何评测分数（只读地报告 drift 趋势）。`MemoryNarrator` 接缝已就位但本阶段只有确定性身份实现（与 Phase 4 先就位的 `IntentJudge` 同构）——LLM 叙述者留到可选的 Phase 5.5，且只能改写描述字段（summary / rationale / title），绝不改动结构事实（code / 计数 / 路径）。`agentops memory` 不调用任何 LLM、不触网、不需 key、零新增运行时依赖；缺失/空历史以结构化错误退出（退出码 1，stderr 提示"先跑 agentops eval"，无 traceback）。
+Phase 6 的边界严格：suggest 对目标仓库**只读**（除 `--output` 外不写任何文件，绝不就地改写 `CLAUDE.md` / `AGENTS.md` / `README.md`），只**建议**、不改写，采纳与否由用户决定；`repo-rules` marker 刻意区别于 `init` 的 `session-protocol` marker，两块可共存。全部投影确定性：加法复用 Phase 5 的规则候选，减法只做可辩护的结构诊断（行数、README 重复），hook 按失败模式 code 映射现有命令；资产**从不**重算或写回任何评测分数。`AssetNarrator` 接缝已就位但本阶段只有确定性身份实现（与 `IntentJudge` / `MemoryNarrator` 同构）——LLM 叙述者留到后续可选切片，且只能改写描述字段（managed_block 散文 / rationale / trend_summary / Finding.message），绝不改动结构事实（target / 规则 kind / hook 命令 / 计数 / 路径）。`agentops suggest` 不调用任何 LLM、不触网、不需 key、零新增运行时依赖；缺失/空历史以结构化错误退出（退出码 1，stderr 提示"先跑 agentops eval"，无 traceback）；`scan` / `eval` / `memory` / `init` / `check-session-log` 行为字节不变。
 
-下一步：进入 Phase 6 改进资产——把规则候选 / skill 候选 / 失败模式落成可直接采纳的 `CLAUDE.md` / `AGENTS.md` 文本、hook 提案和工作流指引。两个问题留待依累积记忆再定：是否让 `drift` 趋势校准确定性分数；是否用可选 LLM 叙述者填充 `MemoryNarrator` 接缝（Phase 5.5）。
+下一步：进入 Phase 7 监督型循环——在已闭合的 observe → evaluate → diagnose → improve 链路上加入 watcher / 实时旁路监督，观察 AI coding 过程、发现风险并给出干预建议，并在累积记忆上做趋势分析。两个问题继续留待依累积记忆再定：是否让 `drift` 趋势反过来校准确定性分数；是否用可选 LLM 叙述者填充已就位的 `MemoryNarrator` / `AssetNarrator` 接缝。
 
 实施时依次执行：
 
 1. 阅读 `docs/project-memory.md`。
 2. 阅读 `docs/development-roadmap.md`，确认下一阶段边界。
-3. 先为 Phase 6 改进资产写一份新的纵向切片实施计划，再开始编码。
+3. 先为 Phase 7 监督型循环写一份新的纵向切片实施计划，再开始编码。
 
 每次只完成计划中的一个 Task，先写失败测试，再写最小实现，然后运行测试并提交。不要一次实现后续 Phase 的能力。
 
