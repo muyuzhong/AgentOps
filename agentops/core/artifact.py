@@ -17,6 +17,10 @@ class ArtifactKind(str, Enum):
     MEMORY_REPORT = "memory_report"
     MEMORY_JSON = "memory_json"
     SKILL_CANDIDATES = "skill_candidates"
+    SUGGESTED_CLAUDE_MD = "suggested_claude_md"
+    SUGGESTED_AGENTS_MD = "suggested_agents_md"
+    HOOK_PROPOSALS = "hook_proposals"
+    SUGGESTIONS_JSON = "suggestions_json"
 
 
 @dataclass(frozen=True)
