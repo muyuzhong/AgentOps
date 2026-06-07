@@ -90,7 +90,10 @@ def test_managed_block_has_one_bullet_per_rule_candidate() -> None:
     assert block.startswith(REPO_RULES_BLOCK_START)
     assert block.endswith(REPO_RULES_BLOCK_END)
     bullets = [line for line in block.splitlines() if line.startswith("- ")]
-    assert bullets == ["- A — do a", "- B — do b"]
+    assert bullets == [
+        "- A: do a Evidence: 'undeclared_change' recurred in 2/3 evals.",
+        "- B: do b Evidence: 'undeclared_change' recurred in 2/3 evals.",
+    ]
 
 
 def test_managed_block_empty_when_no_rule_candidates() -> None:

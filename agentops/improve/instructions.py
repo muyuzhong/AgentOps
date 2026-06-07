@@ -98,7 +98,10 @@ def _render_managed_block(rule_candidates: tuple[Recommendation, ...]) -> str:
 
     if not rule_candidates:
         return ""
-    bullets = "\n".join(f"- {rule.title} — {rule.action}" for rule in rule_candidates)
+    bullets = "\n".join(
+        f"- {rule.title}: {rule.action} Evidence: {rule.rationale}"
+        for rule in rule_candidates
+    )
     return f"{REPO_RULES_BLOCK_START}\n{bullets}\n{REPO_RULES_BLOCK_END}"
 
 

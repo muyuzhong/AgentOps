@@ -17,8 +17,8 @@ from agentops.memory.failure_modes import CONFIRMED_DRIFT
 
 # 失败模式 code → (hook 事件, 建议运行的现有 agentops 命令)。
 _HOOK_FOR_CODE: dict[str, tuple[str, str]] = {
-    "undeclared_change": ("Stop", "agentops check-session-log --repo ."),
-    "declared_not_changed": ("Stop", "agentops check-session-log --repo ."),
+    "undeclared_change": ("Stop", "agentops eval --repo ."),
+    "declared_not_changed": ("Stop", "agentops eval --repo ."),
     "cross_module_breadth": ("Stop", "agentops eval --repo ."),
     CONFIRMED_DRIFT: ("Stop", "agentops eval --repo ."),
 }

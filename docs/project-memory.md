@@ -274,10 +274,10 @@ python -m pytest -v
 - 已完成 Task 2 指令建议投影（加法 + 减法）：
   - `derive_instruction_suggestions`
   - `INSTRUCTION_LINE_BUDGET`（provisional 200）/ `REPO_RULES_BLOCK_START` / `REPO_RULES_BLOCK_END`
-- 固定先 `CLAUDE.md` 再 `AGENTS.md`；加法复用 `memory.rule_candidates`，文件缺失时前置一条 `ADD_CONSTRAINT_FILE`；`agentops:repo-rules` 托管块每条规则候选一行 bullet（无规则则为空串），marker 刻意区别于 init 的 `session-protocol`；减法仅在文件存在时做两类可辩护诊断——`instruction_over_budget`（WARNING，超 200 行）、`duplicates_readme`（INFO，逐字包含 README 首段），保守宁可沉默。输入是文本内容而非路径，纯函数、可离线测试。
+- 固定先 `CLAUDE.md` 再 `AGENTS.md`；加法复用 `memory.rule_candidates`，文件缺失时前置一条 `ADD_CONSTRAINT_FILE`；`agentops:repo-rules` 托管块每条规则候选一行 bullet，并内嵌该候选的 N/M 历史证据（无规则则为空串），marker 刻意区别于 init 的 `session-protocol`；减法仅在文件存在时做两类可辩护诊断——`instruction_over_budget`（WARNING，超 200 行）、`duplicates_readme`（INFO，逐字包含 README 首段），保守宁可沉默。输入是文本内容而非路径，纯函数、可离线测试。
 - 已完成 Task 3 hook 提案投影：
   - `derive_hook_proposals`
-- 复用 Phase 5 复现阈值（≥2）：达标且有已知映射的失败模式才产出提案；映射到同一 `(event, command)` 的模式合并为一条（`failure_codes` 列全部贡献 code、证据合并），按 `(command, 首个 code)` 稳定排序；`settings_snippet` 是确定性渲染的 Claude Code Stop-hook `settings.json` 片段（`json.dumps(indent=2)`）；slug 由子命令 + 事件确定派生。复用现有命令（`check-session-log` / `eval`），不发明新运行时行为。
+- 复用 Phase 5 复现阈值（≥2）：达标且有已知映射的失败模式才产出提案；当前四类 scope 失败模式统一映射到真正执行“声明 vs git 真相”对账的现有 `eval` 命令，并合并为一条 Stop-hook 提案（`failure_codes` 列全部贡献 code、证据合并）；`check-session-log` 只检查日志是否新增，不能检测具体 scope 失败模式。`settings_snippet` 是确定性渲染的 Claude Code Stop-hook `settings.json` 片段（`json.dumps(indent=2)`）；slug 由子命令 + 事件确定派生，不发明新运行时行为。
 - 已完成 Task 4 投影装配与叙述接缝：
   - `build_improvement_assets`
   - `AssetNarrator`（`runtime_checkable` Protocol）
@@ -421,7 +421,7 @@ docs/superpowers/plans/
 - Phase 5 记忆是 `eval-history.jsonl` 的**确定性投影，不是新存储**：每次从历史重新生成并覆盖写出，历史仍是唯一真相来源，不引入第二个 append-only 日志；同样历史产出字节一致的记忆。所有蒸馏确定性（计数、走向、按稳定 code 聚类、按频次排序）。`MemoryNarrator` 接缝先就位、只给确定性身份实现（与 Phase 4 先就位 `IntentJudge` 同构），LLM 叙述者留到可选 Phase 5.5 且只能改写描述字段、绝不改动结构事实。记忆**只读取**分数算趋势，**从不移动分数**；`agentops memory` 是独立命令，`agentops eval` 不自动刷新记忆，二者解耦。
 - Phase 5 规则候选**复用现有 `Recommendation`/`RecommendationKind`**，不新增模型；规则/skill 候选都是带 N/M 证据的**候选数据**，落成最终 `CLAUDE.md`/`AGENTS.md` 文本、hook、workflow 资产是 Phase 6。复现阈值（≥2 次评测）与 scope 扣分权重一样是 provisional，待累积数据校准。
 - Phase 6 改进资产是 `eval-history.jsonl` + 仓库现有指令文件的**确定性投影，不是新存储**：每次重新投影并覆盖写出，记忆仍是单一蒸馏源、历史仍是单一原始源，不引入第二个持久化存储。`agentops suggest` **建议而非改写**——只在 `--output` 下写评审草案，对目标仓库的 `CLAUDE.md` / `AGENTS.md` / `README.md` 完全只读、绝不就地修改；可选的就地 `--write`（复用 `initializers/repo.py` 托管块机制）显式推迟。repo-rules 托管块用 `agentops:repo-rules` marker，刻意区别于 init 的 `agentops:session-protocol`，两块在同一文件可共存。
-- Phase 6 只做确定性投影：加法复用 Phase 5 规则候选，减法只做可辩护的结构诊断（行预算、逐字 README 重复，宁可沉默不误报），hook 按失败模式 code 映射现有命令（`check-session-log` / `eval`，不发明新运行时行为），复用 Phase 5 复现阈值门控并按 `(event, command)` 去重合并。`AssetNarrator` 接缝先就位、只给确定性身份实现（与 `IntentJudge` / `MemoryNarrator` 同构），LLM 叙述者——语义减法判断与散文润色的自然归宿——留到后续可选切片，且只能改写描述字段、绝不改动结构事实（target / 规则 kind / hook 命令 / 计数 / 路径）。资产**从不**重算或写回任何评测分数；`INSTRUCTION_LINE_BUDGET=200` 与复现阈值一样是 provisional，待累积数据校准。`agentops suggest` 是独立命令，`eval` / `memory` 不自动触发它。
+- Phase 6 只做确定性投影：加法复用 Phase 5 规则候选，减法只做可辩护的结构诊断（行预算、逐字 README 重复，宁可沉默不误报），hook 按失败模式 code 映射真正能检测它的现有命令（当前 scope 模式统一映射 `eval`；`check-session-log` 仅检查日志新鲜度，不用于 scope 对账），复用 Phase 5 复现阈值门控并按 `(event, command)` 去重合并。`AssetNarrator` 接缝先就位、只给确定性身份实现（与 `IntentJudge` / `MemoryNarrator` 同构），LLM 叙述者——语义减法判断与散文润色的自然归宿——留到后续可选切片，且只能改写描述字段、绝不改动结构事实（target / 规则 kind / hook 命令 / 计数 / 路径）。资产**从不**重算或写回任何评测分数；`INSTRUCTION_LINE_BUDGET=200` 与复现阈值一样是 provisional，待累积数据校准。`agentops suggest` 是独立命令，`eval` / `memory` 不自动触发它。
 
 ## 已知限制和风险
 

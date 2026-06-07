@@ -162,7 +162,7 @@ agentops suggest --repo <path>
 
 - **建议而非改写**：`agentops suggest` 只在 `--output` 下写**评审草案**，对目标仓库的 `CLAUDE.md` / `AGENTS.md` / `README.md` 完全只读、绝不就地修改；草案里是一段可直接粘贴的 `agentops:repo-rules` 托管块，采纳与否由用户决定。可选的就地 `--write`（复用 `initializers/repo.py` 托管块机制）显式推迟。
 - **加法 + 减法**：加法复用规则候选渲染托管块（每条一行 bullet，各带 N/M 复现）；减法只做两类可辩护的确定性结构诊断——超出 ~200 行预算、逐字重复 README——绝不做语法/风格改写或 Markdown AST，宁可沉默不误报。`agentops:repo-rules` marker 刻意区别于 init 的 `agentops:session-protocol`，两块在同一文件可共存。
-- **hook 复用现有命令**：每个达到复现阈值的失败模式映射到一个现有命令（`check-session-log` / `eval`）和 Stop 事件，渲染可粘贴的 `settings.json` 片段；映射到同一 `(event, command)` 的模式合并为一条提案。Phase 6 只提议接线，不发明新运行时行为。
+- **hook 复用现有命令**：每个达到复现阈值的 scope 失败模式映射到真正执行“声明 vs git 真相”对账的现有 `eval` 命令和 Stop 事件，渲染可粘贴的 `settings.json` 片段；映射到同一 `(event, command)` 的模式合并为一条提案。`check-session-log` 只检查日志是否新增，不能检测具体 scope 失败模式，因此不作为这些模式的拦截命令。Phase 6 只提议接线，不发明新运行时行为。
 - **确定性投影，接缝先就位**：所有投影确定性（复用记忆候选、code→hook 映射、计数、子串匹配 README）。`AssetNarrator` 接缝已就位但本阶段只有确定性身份实现（与 `IntentJudge` / `MemoryNarrator` 同构）；可选 LLM 叙述者——语义减法判断与散文润色的自然归宿——留到后续切片，且**只能改写描述字段**（managed_block 散文 / rationale / trend_summary / Finding.message），绝不改动结构事实（target / 规则 kind / hook 命令 / 计数 / 证据路径）。
 - **资产是投影，不是新存储**：资产每次从 `eval-history.jsonl` + 现有指令文件重新生成并覆盖写出，记忆仍是单一蒸馏源、历史仍是单一原始源；同样输入产出字节一致的资产。资产**从不**重算或写回任何评测分数。
 - **只读、离线、零新增依赖**：`agentops suggest` 对目标仓库只读（仅向 `--output` 写产物），不调用任何 LLM、不触网、不需 key；缺失/空历史以结构化 `ImproveWorkflowError` 退出（退出码 1，提示先跑 `agentops eval`，无 traceback）。

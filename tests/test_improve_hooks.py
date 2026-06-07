@@ -38,36 +38,35 @@ def test_unknown_code_is_ignored() -> None:
     assert derive_hook_proposals(modes) == ()
 
 
-def test_session_log_and_eval_proposals_emitted() -> None:
+def test_scope_failure_modes_use_eval_proposal() -> None:
     modes = (
         _mode("undeclared_change", 3, hot_paths=("src/a.py",)),
         _mode("cross_module_breadth", 2, hot_paths=("src",)),
     )
     proposals = derive_hook_proposals(modes)
 
-    assert {p.command for p in proposals} == {
-        "agentops check-session-log --repo .",
-        "agentops eval --repo .",
-    }
+    assert {p.command for p in proposals} == {"agentops eval --repo ."}
     assert all(p.event == "Stop" for p in proposals)
 
 
-def test_undeclared_and_declared_collapse_into_one_proposal() -> None:
+def test_all_scope_failure_modes_collapse_into_one_eval_proposal() -> None:
     modes = (
         _mode("undeclared_change", 3, hot_paths=("src/a.py",)),
         _mode("declared_not_changed", 2, hot_paths=("src/b.py",)),
+        _mode("cross_module_breadth", 3, hot_paths=("src",)),
+        _mode(CONFIRMED_DRIFT, 2, hot_paths=("src/auth.py",)),
     )
     proposals = derive_hook_proposals(modes)
 
-    # 同 (Stop, check-session-log) → 合并为一条。
-    session_log = [p for p in proposals if "check-session-log" in p.command]
-    assert len(session_log) == 1
-    proposal = session_log[0]
-    assert set(proposal.failure_codes) == {"undeclared_change", "declared_not_changed"}
-    # 证据合并了两个 code。
-    joined = " ".join(proposal.evidence)
-    assert "undeclared_change" in joined
-    assert "declared_not_changed" in joined
+    assert len(proposals) == 1
+    proposal = proposals[0]
+    assert proposal.command == "agentops eval --repo ."
+    assert set(proposal.failure_codes) == {
+        "undeclared_change",
+        "declared_not_changed",
+        "cross_module_breadth",
+        CONFIRMED_DRIFT,
+    }
 
 
 def test_cross_module_and_confirmed_drift_collapse_into_eval_proposal() -> None:
@@ -93,7 +92,7 @@ def test_settings_snippet_is_valid_json_with_command() -> None:
     inner = parsed["hooks"]["Stop"][0]["hooks"][0]
     assert inner == {
         "type": "command",
-        "command": "agentops check-session-log --repo .",
+        "command": "agentops eval --repo .",
     }
 
 
@@ -106,11 +105,7 @@ def test_output_order_is_deterministic() -> None:
     second = derive_hook_proposals(modes)
 
     assert [p.slug for p in first] == [p.slug for p in second]
-    # 按命令排序：check-session-log 在 eval 之前。
-    assert [p.command for p in first] == [
-        "agentops check-session-log --repo .",
-        "agentops eval --repo .",
-    ]
+    assert [p.command for p in first] == ["agentops eval --repo ."]
 
 
 def test_slug_is_stable_for_event_command() -> None:
